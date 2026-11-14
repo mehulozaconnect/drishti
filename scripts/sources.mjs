@@ -210,7 +210,8 @@ export const SECTIONS = [
     ]
   },
   {
-    id: 'health', name: 'Health and lifestyle', short: 'Health', color: '#143A26', tint: '#7BF0B4', icon: 'pulse', weight: 0.95,
+    id: 'health', name: 'Health and lifestyle', short: 'Health',
+    exclude: /(organis|best deals?|buy now|shopping|on sale|discount|amazon|flipkart|wishes|greetings|quotes|messages|shayari|horoscope|outfit|celebrity look|red carpet)/i, color: '#143A26', tint: '#7BF0B4', icon: 'pulse', weight: 0.95,
     feeds: [
       'https://www.who.int/rss-feeds/news-english.xml',
       'https://www.freepressjournal.in/stories.rss?section=lifestyle',
@@ -228,7 +229,8 @@ export const SECTIONS = [
     ]
   },
   {
-    id: 'sports', name: 'Sports', short: 'Sports', color: '#16301A', tint: '#9BE38F', icon: 'trophy', weight: 0.85,
+    id: 'sports', name: 'Sports', short: 'Sports',
+    exclude: /(live streaming|live telecast|where to watch|dream11|fantasy|prediction)/i, color: '#16301A', tint: '#9BE38F', icon: 'trophy', weight: 0.85,
     feeds: [
       'https://www.espncricinfo.com/rss/content/story/feeds/0.xml',
       'https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml',
@@ -244,6 +246,7 @@ export const SECTIONS = [
   },
   {
     id: 'knowledge', name: 'Knowledge', short: 'Knowledge', color: '#1E2A44', tint: '#A9C4FF', icon: 'bulb', weight: 0.7,
+    require: /(explain|what is|what are|what does|what it means|what we know|why (do|does|is|are|did|india|the|we|you)|how (do|does|is|are|did|the|india|to|a|an)|who is|who are|decoded|in charts|in numbers|everything you need|need to know|the story of|history of|understanding|a guide|the science|study finds|what happens|\?$)/i,
     feeds: [
       g('site:indianexpress.com explained'),
       g('site:thehindu.com explained'),
@@ -253,9 +256,7 @@ export const SECTIONS = [
       g('site:bbc.com explainer OR "what we know"'),
       g('site:theprint.in explained OR ThePrint explainer'),
       g('why OR how explained science history economy'),
-      'https://theconversation.com/in/articles.atom',
       'https://www.vox.com/rss/explainers/index.xml',
-      'https://www.downtoearth.org.in/rss/all'
     ]
   },
   {
