@@ -16,7 +16,7 @@ const NOW = Date.now();
 const UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Mobile Safari/537.36 DrishtiNewsBot/1.0';
 const log = (...a) => console.log(...a);
 
-const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@', textNodeName: '#text', cdataPropName: '#cdata', processEntities: true, htmlEntities: true });
+const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@', textNodeName: '#text', cdataPropName: '#cdata', processEntities: false, htmlEntities: false });
 
 // ---------- helpers ----------
 async function fetchText(url, ms = 15000, headers = {}) {
@@ -64,12 +64,29 @@ function trustedName(u) {
 }
 const STOP = new Set('a an the of to in on for and or but is are was were be been with by at from as it its this that after over into new says said amid will can has have had not no up out than more how why what who when where vs his her their they you your we our all about just also live updates update watch video photos check today latest india indian mumbai'.split(' '));
 function tokens(title) {
-  return new Set(title.toLowerCase().replace(/[‘’'`]/g, '').replace(/[^a-z0-9ऀ-ॿ ]+/g, ' ').split(' ').filter((w) => w.length > 2 && !STOP.has(w)));
+  return new Set(title.toLowerCase().replace(/[‘’'`]s\b/g, '').replace(/[‘’'`]/g, '').replace(/[^a-z0-9\u0900-\u097f ]+/g, ' ').split(' ')
+    .map((w) => (w.length > 4 && w.endsWith('ies') ? w.slice(0, -3) + 'y' : w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+    .filter((w) => (w.length > 2 || /^\d+$/.test(w)) && !STOP.has(w)));
 }
+// word rarity across this run's headlines: rare shared words (names, places) count more
+const DF = new Map(); let DOCS = 1;
+function learnDF(titles) { DOCS = titles.length || 1; DF.clear(); for (const t of titles) for (const w of tokens(t)) DF.set(w, (DF.get(w) || 0) + 1); }
+const idf = (w) => Math.log(1 + DOCS / (1 + (DF.get(w) || 0)));
 function jaccard(a, b) {
   let i = 0; for (const x of a) if (b.has(x)) i++;
   const u = a.size + b.size - i; return u ? i / u : 0;
 }
+// same story if word overlap is strong (handles long and short headlines of the same event)
+function similar(a, b) {
+  let inter = 0, n = 0, wa = 0, wb = 0;
+  for (const x of a) { const v = idf(x); wa += v; if (b.has(x)) { inter += v; n++; } }
+  for (const x of b) wb += idf(x);
+  if (n < 2) return 0;
+  const j = inter / (wa + wb - inter);
+  const ov = inter / Math.min(wa, wb);
+  return Math.max(j, ov * 0.7);
+}
+const JUNK = /(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
 const words = (s, n) => { const w = s.split(/\s+/); return w.length <= n ? s : w.slice(0, n).join(' ').replace(/[,;:]$/, '') + '…'; };
 const hash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 12);
 
@@ -97,10 +114,11 @@ function parseFeed(xml, feedUrl) {
     let title = clean(txt(it.title));
     let link = typeof it.link === 'string' ? it.link : (Array.isArray(it.link) ? (it.link.find((l) => !l['@rel'] || l['@rel'] === 'alternate')?.['@href'] ?? txt(it.link[0])) : (it.link?.['@href'] ?? txt(it.link)));
     if (!link && it.guid) link = txt(it.guid);
+    link = String(link || '').trim().replace(/&amp;/g, '&');
     const descHtml = txt(it['content:encoded']) || txt(it.description) || txt(it.summary) || txt(it.content);
     let publisher = feedPub, pubUrl = link;
     if (isG) {
-      const src = it.source; const su = src?.['@url'] || ''; const sn = clean(txt(src));
+      const src = it.source; const su = (src?.['@url'] || '').replace(/&amp;/g, '&'); const sn = clean(txt(src));
       publisher = trustedName(su);
       if (!publisher) continue; // not a trusted outlet
       if (sn && title.endsWith(' - ' + sn)) title = title.slice(0, -(sn.length + 3));
@@ -144,10 +162,10 @@ function clusterItems(items) {
     if (tk.size < 2) continue;
     let best = null, bs = 0;
     for (const c of clusters) {
-      const s = jaccard(tk, c.tk);
+      const s = similar(tk, c.tk);
       if (s > bs) { bs = s; best = c; }
     }
-    if (best && bs >= 0.34) {
+    if (best && bs >= 0.4) {
       if (!best.items.some((x) => x.link === it.link)) best.items.push(it);
       for (const w of tk) best.tk.add(w);
     } else clusters.push({ tk: new Set(tk), items: [it] });
@@ -316,9 +334,10 @@ async function main() {
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
     const lists = await Promise.all(sec.feeds.map(loadFeed));
     const maxAge = (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
-    return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6);
+    return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title));
   }));
   const checkItems = (await Promise.all(FACTCHECK_FEEDS.map(loadFeed))).flat().filter((i) => NOW - i.time < 7 * 864e5);
+  learnDF([...sectionItems.flat(), ...checkItems].map((i) => i.title));
 
   let all = [];
   const sections = [];
@@ -336,7 +355,7 @@ async function main() {
   const kept = [];
   for (const s of all) {
     const tk = tokens(s.title);
-    const dup = kept.find((k) => jaccard(tokens(k.title), tk) >= 0.5);
+    const dup = kept.find((k) => similar(tokens(k.title), tk) >= 0.45);
     if (dup) { for (const p of s.sources) if (!dup.sources.some((x) => x.name === p.name)) dup.sources.push(p); dup.n = dup.sources.length; (dup.also ||= []).includes(s.section) || dup.also.push(s.section); if (!dup.image && s.image) dup.image = s.image; continue; }
     kept.push(s);
   }
@@ -350,7 +369,8 @@ async function main() {
   const perSec = {};
   for (const s of [...all].sort((a, b) => (b.score * (b.n > 1 ? 1.3 : 1)) - (a.score * (a.n > 1 ? 1.3 : 1)))) {
     if (mustKnow.length >= 10) break;
-    if ((perSec[s.section] || 0) >= 3) continue;
+    if ((perSec[s.section] || 0) >= 2) continue;
+    if (mustKnow.some((id) => similar(tokens(all.find((x) => x.id === id).title), tokens(s.title)) >= 0.2)) continue;
     perSec[s.section] = (perSec[s.section] || 0) + 1;
     mustKnow.push(s.id);
   }

@@ -76,7 +76,7 @@ export const SECTIONS = [
     feeds: [
       'https://timesofindia.indiatimes.com/rssfeeds/-2128838597.cms',
       'https://www.hindustantimes.com/feeds/rss/cities/mumbai-news/rssfeed.xml',
-      'https://indianexpress.com/section/cities/mumbai/feed/',
+      g('site:indianexpress.com Mumbai'),
       'https://www.thehindu.com/news/cities/mumbai/feeder/default.rss',
       'https://www.freepressjournal.in/stories.rss?section=mumbai',
       g('Malad Mumbai'),
@@ -90,7 +90,7 @@ export const SECTIONS = [
     feeds: [
       'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',
       'https://www.thehindu.com/news/national/feeder/default.rss',
-      'https://indianexpress.com/section/india/feed/',
+      g('site:indianexpress.com India'),
       'https://feeds.feedburner.com/ndtvnews-top-stories',
       'https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml',
       g('India news')
@@ -103,7 +103,7 @@ export const SECTIONS = [
       'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml',
       'https://www.aljazeera.com/xml/rss/all.xml',
       'https://www.thehindu.com/news/international/feeder/default.rss',
-      'https://indianexpress.com/section/world/feed/',
+      g('site:indianexpress.com world'),
       g('Iran Israel'),
       g('United States Trump'),
       g('site:reuters.com world'),
@@ -115,9 +115,9 @@ export const SECTIONS = [
     feeds: [
       'https://www.livemint.com/rss/markets',
       'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
-      'https://www.moneycontrol.com/rss/marketreports.xml',
-      'https://www.moneycontrol.com/rss/latestnews.xml',
-      'https://www.business-standard.com/rss/markets-106.rss',
+      g('site:moneycontrol.com markets'),
+      g('site:business-standard.com markets'),
+      g('stock market today India Nifty'),
       g('Sensex Nifty'),
       g('RBI repo rate OR inflation India')
     ]
@@ -127,7 +127,7 @@ export const SECTIONS = [
     feeds: [
       'https://www.livemint.com/rss/money',
       'https://economictimes.indiatimes.com/mf/rssfeeds/359241701.cms',
-      'https://www.moneycontrol.com/rss/mfnews.xml',
+      g('site:moneycontrol.com mutual fund'),
       g('mutual fund SIP'),
       g('personal finance tax saving India')
     ]
@@ -144,7 +144,7 @@ export const SECTIONS = [
     id: 'bollywood', name: 'Bollywood', short: 'Bollywood', color: '#4A1530', tint: '#FF9CC6', icon: 'star', weight: 0.85,
     feeds: [
       'https://www.hindustantimes.com/feeds/rss/entertainment/bollywood/rssfeed.xml',
-      'https://indianexpress.com/section/entertainment/bollywood/feed/',
+      g('site:indianexpress.com Bollywood'),
       'https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms',
       g('Bollywood')
     ]
@@ -152,7 +152,7 @@ export const SECTIONS = [
   {
     id: 'movies', name: 'Movies and reviews', short: 'Movies', color: '#2A1F4F', tint: '#C7BAFF', icon: 'film', weight: 0.8,
     feeds: [
-      'https://indianexpress.com/section/entertainment/movie-review/feed/',
+      g('movie review rating stars'),
       g('movie review Bollywood'),
       g('box office collection'),
       g('new release this Friday OR OTT release this week')
@@ -168,8 +168,8 @@ export const SECTIONS = [
   {
     id: 'phones', name: 'Phones and offers', short: 'Phones', color: '#1C2A33', tint: '#8FD3F5', icon: 'phone', weight: 0.85,
     feeds: [
-      'https://www.91mobiles.com/hub/feed/',
-      'https://www.gsmarena.com/rss-news-reviews.php3',
+      g('site:91mobiles.com'),
+      g('site:gsmarena.com'),
       'https://feeds.feedburner.com/gadgets360-latest',
       g('smartphone launch India price'),
       g('phone review India'),
@@ -181,7 +181,7 @@ export const SECTIONS = [
     feeds: [
       'https://www.theverge.com/rss/index.xml',
       'https://www.engadget.com/rss.xml',
-      'https://indianexpress.com/section/technology/feed/',
+      g('site:indianexpress.com technology gadgets'),
       'https://www.livemint.com/rss/technology',
       g('new gadget launch'),
       g('AI tools OR ChatGPT OR Gemini new feature')
@@ -193,7 +193,7 @@ export const SECTIONS = [
       'https://www.who.int/rss-feeds/news-english.xml',
       'https://feeds.bbci.co.uk/news/health/rss.xml',
       'https://www.thehindu.com/sci-tech/health/feeder/default.rss',
-      'https://indianexpress.com/section/lifestyle/health/feed/',
+      g('site:indianexpress.com health'),
       g('Mumbai health OR dengue OR malaria OR hospital'),
       g('health study India'),
       g('ICMR OR health ministry advisory')
@@ -210,7 +210,7 @@ export const SECTIONS = [
 ];
 
 export const FACTCHECK_FEEDS = [
-  'https://www.boomlive.in/fact-check/feed',
+  g('site:boomlive.in fact check'),
   'https://www.altnews.in/feed/',
   'https://factly.in/feed/',
   g('PIB Fact Check fake'),
