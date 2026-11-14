@@ -157,7 +157,7 @@ function art(sec, size = 84, big = false) {
 }
 const img = (s, sz, big) => s.image ? `<img src="${esc(s.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:window.__art('${s.section}',${sz},${big ? 1 : 0})}).firstChild)">` : art(s.section, sz, big);
 window.__art = (sec, sz, big) => art(sec, sz, !!big);
-const storyRow = (s) => { const m = secMeta(s.section); return `<a class="story" href="#story/${s.id}"><div class="thumb">${img(s, 84)}</div><div class="col gap4 grow"><span class="tag" style="color:${m.tint}">${esc(m.short)} · ${esc(s.sources[0]?.name || '')}</span><span class="ttl clamp3">${esc(s.headline || s.title)}</span><span class="meta">${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${ic('shield', 12, 2.2)} ${s.n} sources</span>` : ''}${s.factCheck ? ` · <span style="color:var(--bad)">fact-check</span>` : ''}${s.local ? ' · <span style="color:var(--accent-text)">Near you</span>' : ''}</span></div></a>`; };
+const storyRow = (s) => { const m = secMeta(s.section); return `<a class="story" href="#story/${s.id}"><div class="thumb">${img(s, 84)}</div><div class="col gap4 grow"><span class="tag" style="color:${m.tint}">${esc(m.short)} · ${esc(s.sources[0]?.name || '')}</span><span class="ttl clamp3">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="small muted clamp2">${esc(s.summary)}</span>` : ''}<span class="meta">${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${ic('shield', 12, 2.2)} ${s.n} sources</span>` : ''}${s.factCheck ? ` · <span style="color:var(--bad)">fact-check</span>` : ''}${s.local ? ' · <span style="color:var(--accent-text)">Near you</span>' : ''}</span></div></a>`; };
 const navHtml = (on) => `<nav class="nav" aria-label="Main"><div class="in">${[['home', 'home', 'Home'], ['quick', 'bolt', 'Quick 60'], ['money', 'chart', 'Money'], ['ask', 'sparkle', 'Ask'], ['explore', 'grid', 'Explore']].map(([r, i, l]) => `<a href="#${r}" class="${on === r ? 'on' : ''}">${ic(i, 22)}${l}</a>`).join('')}</div></nav>`;
 const backBar = (label = 'Back') => `<div class="top" style="padding-top:8px"><button class="back" data-act="back">${ic('back', 20, 2)}${label}</button></div>`;
 function spark(vals, w = 300, h = 90, color = 'var(--up)', fill = true) {
@@ -192,7 +192,7 @@ function viewHome() {
   const hero = n.stories.filter((s) => s.image && !n.mustKnow.slice(0, 1).includes(s.id)).sort((a, b) => b.score - a.score)[0];
   const fcs = (n.factChecks || []).slice(0, 2);
   const th = THOUGHTS[dayIndex() % THOUGHTS.length]; const tp = TIPS[dayIndex() % TIPS.length];
-  const forYou = S.settings.sections.map((id) => { const list = secStories(id).filter((s) => !n.mustKnow.includes(s.id)).slice(0, 3); if (!list.length) return ''; const m = secMeta(id); return `<div class="sec-head"><span class="h2 row gap8"><span style="width:10px;height:10px;border-radius:5px;background:${m.tint}"></span>${esc(m.name)}</span><a href="#section/${id}">See all</a></div><div>${list.map(storyRow).join('')}</div>`; }).join('');
+  const forYou = S.settings.sections.map((id) => { const list = secStories(id).filter((s) => !n.mustKnow.includes(s.id)).slice(0, 3); if (!list.length) return ''; const m = secMeta(id); return `<div class="sec-head"><span class="h2 row gap8"><span style="width:10px;height:10px;border-radius:5px;background:${m.tint}"></span>${esc(m.name)}</span><a href="#section/${id}">See all</a></div><div>${list[0].summary && list[0].image ? storyCard(list[0]) + list.slice(1).map(storyRow).join('') : list.map(storyRow).join('')}</div>`; }).join('');
   return `${header()}
   <div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div>
   ${weather}
@@ -211,28 +211,34 @@ function viewHome() {
 }
 const header = () => `<div class="top"><div class="brand">${logo()}<b>Drishti</b></div><div class="row gap8"><a class="ibtn" href="#search" aria-label="Search">${ic('search')}</a><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div></div>`;
 
-function viewQuick() {
+const FEED_TABS = [['all', 'My feed'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['markets', 'Markets'], ['money', 'SIP and MF'], ['gold', 'Gold'], ['bollywood', 'Bollywood'], ['movies', 'Movies'], ['phones', 'Phones'], ['gadgets', 'Gadgets'], ['health', 'Health'], ['viral', 'Viral'], ['spiritual', 'Spiritual']];
+const hasBody = (s) => (s.summary || '').length > 90;
+function viewQuick(tab = 'all') {
   const n = S.news; if (!n) return `<div class="empty">Loading…</div>`;
-  const list = n.quick60.map((id) => S.byId[id]).filter(Boolean);
-  const startAt = Math.max(0, list.findIndex((s) => !S.read.has(s.id)));
+  let list = tab === 'all' ? n.quick60.map((id) => S.byId[id]).filter(Boolean) : secStories(tab);
+  const full = list.filter(hasBody); if (full.length >= 5) list = full.concat(list.filter((s) => !hasBody(s)).slice(0, 0));
+  const startAt = tab === 'all' ? Math.max(0, list.findIndex((s) => !S.read.has(s.id))) : 0;
   const cards = list.map((s, i) => {
-    const m = secMeta(s.section);
-    return `<section class="qcard" data-id="${s.id}" data-i="${i}"><div class="qimg">${img(s, 200, true)}</div><div class="qbody">
-      <div class="row gap8" style="flex-wrap:wrap"><span class="badge" style="background:${m.color};color:${m.tint}">${esc(m.short)}</span>${verify(s)}<span class="xs muted">${ago(s.time)} ago</span></div>
+    const m = secMeta(s.section); const src = s.sources[0]?.name || '';
+    return `<section class="qcard" data-id="${s.id}" data-i="${i}"><div class="qimg">${img(s, 200, true)}
+      <span class="qsrc">${avatars(s.sources, 1)}<span>${esc(src)}</span>${s.n > 1 ? `<span class="xs" style="color:var(--ok)">+${s.n - 1}</span>` : ''}</span>
+      <span class="qtools"><button data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button data-act="share" data-id="${s.id}" aria-label="Share">${ic('share', 20)}</button></span></div>
+      <div class="qbody">
       <h2>${esc(s.headline || s.title)}</h2>
-      <p>${esc(s.summary || 'Open the full story for details.')}</p>
+      <p>${esc(s.summary || 'Tap below to read the full report.')}</p>
+      <div class="row gap8" style="flex-wrap:wrap"><span class="xs muted">${ago(s.time)} ago</span>${verify(s)}<span class="badge" style="background:${m.color};color:${m.tint}">${esc(m.short)}</span></div>
       ${s.factCheck ? `<a class="fc" href="${esc(s.factCheck.link)}" target="_blank" rel="noopener">${ic('alert', 18, 2)}<span>Related fact-check by ${esc(s.factCheck.source)}: ${esc(s.factCheck.title)}</span></a>` : ''}
-      <div class="srcs">${avatars(s.sources)}<span class="xs muted clamp2">${esc(s.sources.map((x) => x.name).join(', '))}</span></div>
-      <div class="qact"><a class="btn btn-main" href="${esc(s.link)}" target="_blank" rel="noopener">Read full story ${ic('ext', 16, 2)}</a><button class="btn btn-ghost" data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button class="btn btn-ghost" data-act="share" data-id="${s.id}" aria-label="Share" style="color:var(--up)">${ic('wa', 20)}</button></div>
-      <div class="xs muted" style="text-align:center">${i < list.length - 1 ? `${ic('up', 14, 2)} Swipe up · ${i + 2} of ${list.length}` : 'That’s everything for now'}</div>
-    </div></section>`;
+      </div>
+      <a class="qmore" href="${esc(s.link)}" target="_blank" rel="noopener"><span class="col"><b>Read full story</b><span class="xs">at ${esc(src)}${s.n > 1 ? ` · also ${esc(s.sources.slice(1, 3).map((x) => x.name).join(', '))}` : ''}</span></span>${ic('ext', 20, 2)}</a>
+    </section>`;
   }).join('');
-  const done = `<section class="qcard" style="align-items:center;justify-content:center;text-align:center;padding:24px"><span style="color:var(--ok)">${ic('check', 56, 2)}</span><h2 class="h1 mt16">All caught up</h2><p class="muted">You’ve seen today’s ${list.length} key stories.</p><a class="btn btn-acc mt16" href="#home">Back to home</a></section>`;
-  setTimeout(() => setupQuick(startAt, list.length), 0);
-  return `<div class="qbar"><div class="qprog"><i id="qp" style="width:0"></i></div><div class="qtop"><a class="glass row" href="#home" style="height:40px;padding:0 12px 0 8px" aria-label="Back to home">${ic('back', 20, 2)}<span class="small">Home</span></a><span class="glass small" style="padding:7px 12px;display:flex;align-items:center;gap:6px">${ic('bolt', 14, 2.2)}Quick 60</span><span class="glass small" id="qc" style="padding:7px 12px">1/${list.length}</span></div></div><div class="qwrap" id="qw">${cards}${done}</div>`;
+  const done = `<section class="qcard" style="align-items:center;justify-content:center;text-align:center;padding:24px"><span style="color:var(--ok)">${ic('check', 56, 2)}</span><h2 class="h1 mt16">All caught up</h2><p class="muted">You’ve seen ${list.length} stories${tab === 'all' ? '' : ' in ' + esc(secMeta(tab).short)}.</p><a class="btn btn-acc mt16" href="#home">Back to home</a></section>`;
+  setTimeout(() => setupQuick(startAt, list.length, tab), 0);
+  return `<div class="qbar"><div class="row gap8"><a class="ibtn" href="#home" aria-label="Back to home" style="width:40px;height:40px;flex-shrink:0">${ic('back', 20, 2)}</a><div class="qtabs" id="qt">${FEED_TABS.map(([id, l]) => `<a href="#quick/${id}" class="${tab === id ? 'on' : ''}">${l}</a>`).join('')}</div><span class="xs muted" id="qc" style="flex-shrink:0;min-width:38px;text-align:right">1/${list.length}</span></div><div class="qprog"><i id="qp" style="width:0"></i></div></div><div class="qwrap" id="qw">${list.length ? cards + done : '<div class="empty mt24">No stories here right now.</div>'}</div>`;
 }
-function setupQuick(start, total) {
+function setupQuick(start, total, tab) {
   const w = $('#qw'); if (!w) return;
+  $('#qt .on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
   if (start > 0) w.scrollTop = start * w.clientHeight;
   const io = new IntersectionObserver((ents) => ents.forEach((e) => {
     if (e.isIntersecting && e.intersectionRatio > 0.6) {
@@ -243,6 +249,7 @@ function setupQuick(start, total) {
   }), { root: w, threshold: [0.6] });
   w.querySelectorAll('.qcard').forEach((c) => io.observe(c));
 }
+const storyCard = (s) => { const m = secMeta(s.section); return `<article class="scard"><a href="#story/${s.id}" class="scimg">${img(s, 200, true)}<span class="qsrc" style="bottom:10px;left:10px">${avatars(s.sources, 1)}<span>${esc(s.sources[0]?.name || '')}</span></span></a><a href="#story/${s.id}" class="col gap6" style="padding:14px 16px 4px"><span class="sct">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="scs">${esc(s.summary)}</span>` : ''}</a><div class="row gap8" style="padding:6px 16px 14px;flex-wrap:wrap"><span class="xs muted">${ago(s.time)} ago</span>${verify(s)}${s.local ? '<span class="badge b-warn">Near you</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="${esc(s.link)}" target="_blank" rel="noopener">Full story ${ic('ext', 12, 2)}</a></div></article>`; };
 
 function viewStory(id) {
   const s = S.byId[id]; if (!s) return `${backBar()}<div class="empty">This story is no longer in today’s feed.</div>`;
@@ -269,7 +276,7 @@ function viewSection(id) {
   if (id === 'health') { const tp = TIPS[dayIndex() % TIPS.length]; const tp2 = TIPS[(dayIndex() + 7) % TIPS.length]; top = `<div class="quote mt12"><span class="eyebrow" style="color:var(--ok)">Today’s self-care</span><p style="font-size:17px">${esc(tp[0])}</p><span class="small muted">${esc(tp[1])}</span><p style="font-size:17px;margin-top:14px">${esc(tp2[0])}</p><span class="small muted">${esc(tp2[1])}</span></div>`; }
   if (id === 'gold' || id === 'markets') top = `<a class="card row mt12" href="#money">${ic('chart', 20)}<span class="grow">Live rates and charts in Money</span>${ic('chev', 18)}</a>`;
   if (id === 'viral' && S.news?.videos?.length) top = `<a class="card row mt12" href="#videos">${ic('play', 20)}<span class="grow">Trending YouTube videos in India</span>${ic('chev', 18)}</a>`;
-  return `${backBar('Explore')}<div class="row gap12 mt8"><span style="width:48px;height:48px;border-radius:14px;background:${m.color};color:${m.tint};display:flex;align-items:center;justify-content:center">${ic(m.icon, 24)}</span><div class="col"><h1 class="h1" style="font-size:26px">${esc(m.name)}</h1><span class="small muted">${list.length} stories · updated ${S.news ? ago(S.news.updated) : ''} ago</span></div></div>${top}<div class="mt12">${list.length ? list.map(storyRow).join('') : '<div class="empty">No fresh stories right now.</div>'}</div>`;
+  return `${backBar('Explore')}<div class="row gap12 mt8"><span style="width:48px;height:48px;border-radius:14px;background:${m.color};color:${m.tint};display:flex;align-items:center;justify-content:center">${ic(m.icon, 24)}</span><div class="col"><h1 class="h1" style="font-size:26px">${esc(m.name)}</h1><span class="small muted">${list.length} stories · updated ${S.news ? ago(S.news.updated) : ''} ago</span></div></div>${top}<a class="q60" href="#quick/${id}" style="margin-top:14px">${ic('bolt', 22, 2)}<span class="col grow"><b style="font-size:16px">Swipe through ${esc(m.short)}</b><span class="small" style="opacity:.8">One story per screen, 60 words each</span></span>${ic('chev', 20, 2)}</a><div class="col gap16 mt16">${list.length ? list.slice(0, 40).map((x) => (x.summary ? storyCard(x) : storyRow(x))).join('') : '<div class="empty">No fresh stories right now.</div>'}</div>`;
 }
 
 function viewExplore() {
@@ -504,7 +511,7 @@ function render() {
   const [r, a] = route(); const v = $('#view');
   const map = { home: viewHome, quick: viewQuick, money: viewMoney, grow: viewGrow, ask: viewAsk, explore: viewExplore, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide };
   let html;
-  if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
+  if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
   const tab = { home: 'home', quick: 'quick', money: 'money', grow: 'money', calc: 'money', guide: 'money', learn: 'money', ask: 'ask' }[r] || (r === 'story' ? S.lastTab : 'explore');
   if (r !== 'story') S.lastTab = tab;
   v.className = r === 'quick' ? 'full' : '';

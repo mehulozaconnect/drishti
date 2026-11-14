@@ -26,6 +26,11 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --omit=dev || npm install --omit=dev
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: drishti-cache-${{ github.run_id }}
+          restore-keys: drishti-cache-
       - name: Fetch news and markets
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -33,6 +38,11 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: node scripts/fetch.mjs
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache
+          key: drishti-cache-${{ github.run_id }}
       - name: Save data
         run: |
           git config user.name "drishti-bot"

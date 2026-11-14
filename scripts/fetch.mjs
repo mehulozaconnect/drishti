@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { TRUSTED, SECTIONS, FACTCHECK_FEEDS } from './sources.mjs';
 
 const DATA = new URL('../data/', import.meta.url);
+const CACHE = new URL('../.cache/', import.meta.url); // kept between runs by actions/cache, not committed
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODELS = (process.env.GEMINI_MODEL || 'gemini-2.5-flash,gemini-flash-latest,gemini-2.0-flash').split(',');
 const YT_KEY = process.env.YOUTUBE_API_KEY || '';
@@ -28,12 +29,12 @@ async function fetchText(url, ms = 15000, headers = {}) {
     return await r.text();
   } finally { clearTimeout(t); }
 }
-async function readJson(name, fallback) {
-  try { return JSON.parse(await readFile(new URL(name, DATA), 'utf8')); } catch { return fallback; }
+async function readJson(name, fallback, dir = DATA) {
+  try { return JSON.parse(await readFile(new URL(name, dir), 'utf8')); } catch { return fallback; }
 }
-async function writeJson(name, obj) {
-  await mkdir(DATA, { recursive: true });
-  await writeFile(new URL(name, DATA), JSON.stringify(obj));
+async function writeJson(name, obj, dir = DATA) {
+  await mkdir(dir, { recursive: true });
+  await writeFile(new URL(name, dir), JSON.stringify(obj));
 }
 const txt = (v) => {
   if (v == null) return '';
@@ -200,6 +201,7 @@ function buildStory(c, section) {
     n,
     time: newest,
     first,
+    links: c.items.map((i) => i.link).filter((l) => !l.includes('news.google.com')).slice(0, 3),
     local: !!isLocal,
     breaking: BREAKING.test(lead.title) && ageH < 6,
     score: Math.round(score * 1000) / 1000
@@ -214,6 +216,86 @@ function attachFactChecks(stories, checks) {
     let best = null, bs = 0;
     for (const c of ct) { const j = jaccard(st, c.tk); if (j > bs) { bs = j; best = c; } }
     if (best && bs >= 0.3) s.factCheck = { title: best.title, source: best.publisher, link: best.link };
+  }
+}
+
+
+// ---------- article enrichment: real publisher link, photo and opening text ----------
+async function decodeGoogle(url) {
+  try {
+    const id = url.split('/articles/')[1].split('?')[0];
+    const html = await fetchText(`https://news.google.com/rss/articles/${id}`, 10000);
+    const sg = /data-n-a-sg="([^"]+)"/.exec(html)?.[1], ts = /data-n-a-ts="([^"]+)"/.exec(html)?.[1];
+    if (!sg || !ts) return null;
+    const inner = `["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],"${id}",${ts},"${sg}"]`;
+    const body = 'f.req=' + encodeURIComponent(JSON.stringify([[['Fbv4je', inner, null, 'generic']]]));
+    const r = await fetch('https://news.google.com/_/DotsSplashUi/data/batchexecute', { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', 'User-Agent': UA } });
+    const t = await r.text();
+    const part = t.split('\n\n')[1]; if (!part) return null;
+    const u = JSON.parse(JSON.parse(part)[0][2])[1];
+    return /^https?:\/\//.test(u) ? u : null;
+  } catch { return null; }
+}
+const BOILER = /(also read|read more|click here|subscribe|follow us|download the app|all rights reserved|©|cookie|advertisement|newsletter|whatsapp channel|join our|sign up|log in|reported by|edited by|updated on|first published|for more news|stay updated|google news)/i;
+function extractArticle(html) {
+  const meta = (k) => new RegExp(`<meta[^>]+(?:property|name)=["']${k}["'][^>]+content=["']([^"']+)["']`, 'i').exec(html)?.[1] || new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${k}["']`, 'i').exec(html)?.[1];
+  let image = meta('og:image') || meta('twitter:image');
+  if (image && !/^https:/.test(image)) image = null;
+  const ogd = clean(meta('og:description') || meta('description') || '');
+  let text = '';
+  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const ab = /"articleBody"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(m[1]);
+    if (ab) { try { text = clean(JSON.parse('"' + ab[1] + '"')); } catch { text = clean(ab[1]); } if (text.length > 200) break; }
+  }
+  if (text.length < 200) {
+    const paras = [];
+    for (const m of html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)) {
+      const t = clean(m[1]);
+      if (t.length >= 70 && !BOILER.test(t) && !paras.includes(t)) paras.push(t);
+      if (paras.join(' ').length > 1600) break;
+    }
+    text = paras.join(' ');
+  }
+  return { image, ogd, text: text.slice(0, 1800) };
+}
+function extractive(text, fallback) {
+  const src = (text && text.length > 150 ? text : fallback || '').replace(/\s+/g, ' ').trim();
+  if (!src) return '';
+  const sents = src.match(/[^.!?]+[.!?]+["’”]?(\s|$)/g) || [src];
+  let out = '';
+  for (const x of sents) { const next = (out + ' ' + x.trim()).trim(); if (next.split(' ').length > 72 && out) break; out = next; if (out.split(' ').length >= 48) break; }
+  return words(out, 75);
+}
+async function pool(items, n, fn) { const q = [...items]; await Promise.all(Array.from({ length: n }, async () => { while (q.length) await fn(q.shift()); })); }
+
+async function enrich(stories, cache) {
+  const need = stories.filter((s) => !(cache[s.id]?.text != null && (cache[s.id].img || s.image)));
+  let ok = 0, dec = 0;
+  await pool(need, 8, async (s) => {
+    const c = cache[s.id] ||= { n: 0, at: NOW };
+    let url = s.link;
+    if (url.includes('news.google.com')) {
+      const alt = s.links?.find((l) => !l.includes('news.google.com'));
+      url = alt || await decodeGoogle(url) || url;
+      if (!url.includes('news.google.com')) dec++;
+    }
+    c.url = url.includes('news.google.com') ? null : url;
+    c.text = ''; 
+    if (c.url) {
+      try {
+        const html = await fetchText(c.url, 10000, { Accept: 'text/html' });
+        const a = extractArticle(html);
+        c.text = a.text; c.ogd = a.ogd; if (a.image) c.img = a.image; ok++;
+      } catch { /* blocked or slow: keep feed snippet */ }
+    }
+  });
+  log(`enrich: ${need.length} new, ${dec} google links decoded, ${ok} articles read`);
+  for (const s of stories) {
+    const c = cache[s.id]; if (!c) continue;
+    if (c.url) { s.link = c.url; if (s.sources[0]) s.sources[0].url = s.sources[0].url.includes('news.google.com') ? c.url : s.sources[0].url; }
+    if (!s.image && c.img) s.image = c.img;
+    s.body = c.text || '';
+    if (!s.desc && c.ogd && c.ogd.length > 60) s.desc = c.ogd;
   }
 }
 
@@ -235,30 +317,30 @@ async function gemini(prompt) {
 }
 
 async function summarise(stories, cache) {
-  const need = stories.filter((s) => !cache[s.id] || cache[s.id].n < s.n);
+  const need = stories.filter((s) => !cache[s.id]?.summary || cache[s.id].n < s.n);
   log(`summaries: ${stories.length - need.length} cached, ${need.length} to write, gemini=${GEMINI_KEY ? 'on' : 'off'}`);
   if (GEMINI_KEY) {
-    for (let i = 0; i < need.length && i < 120; i += 12) {
-      const batch = need.slice(i, i + 12);
+    for (let i = 0; i < need.length && i < 160; i += 8) {
+      const batch = need.slice(i, i + 8);
       const prompt = `You write the "Quick 60" section of an Indian morning news app. For each story below, write a neutral, factual summary of 50 to 60 words in plain English, using ONLY the facts given (headlines and snippets from trusted outlets). Do not invent numbers, names or quotes. Lead with what happened, then why it matters. Also write a short headline (max 12 words).
 Return JSON: [{"id":"...","headline":"...","summary":"..."}]
 
-${batch.map((s) => JSON.stringify({ id: s.id, headlines: [s.title, ...(s.alt || [])].slice(0, 4), snippet: s.desc, outlets: s.sources.map((x) => x.name) })).join('\n')}`;
+${batch.map((s) => JSON.stringify({ id: s.id, headlines: [s.title, ...(s.alt || [])].slice(0, 4), snippet: s.desc, article_start: (s.body || '').slice(0, 1200), outlets: s.sources.map((x) => x.name) })).join('\n')}`;
       const out = await gemini(prompt);
       if (!out) break;
       try {
         const arr = JSON.parse(out.replace(/^```json|```$/g, ''));
-        for (const x of arr) if (x.id && x.summary) cache[x.id] = { headline: x.headline, summary: x.summary.trim(), n: (stories.find((s) => s.id === x.id) || {}).n || 1, at: NOW };
+        for (const x of arr) if (x.id && x.summary) Object.assign(cache[x.id] ||= {}, { headline: x.headline, summary: x.summary.trim(), n: (stories.find((s) => s.id === x.id) || {}).n || 1, at: NOW, ai: true });
       } catch (e) { log('gemini parse fail', e.message); }
     }
   }
   for (const s of stories) {
     const c = cache[s.id];
-    if (c) { s.summary = c.summary; if (c.headline) s.headline = c.headline; s.ai = true; }
-    else s.summary = s.desc ? words(s.desc, 60) : '';
+    if (c?.summary) { s.summary = c.summary; if (c.headline) s.headline = c.headline; s.ai = !!c.ai; }
+    else s.summary = extractive(s.body, s.desc);
   }
   // drop cache entries older than 4 days
-  for (const k of Object.keys(cache)) if (NOW - cache[k].at > 4 * 864e5) delete cache[k];
+  for (const k of Object.keys(cache)) { if (NOW - (cache[k].at || 0) > 3 * 864e5) delete cache[k]; else if (cache[k].text) cache[k].text = cache[k].text.slice(0, 1300); }
 }
 
 // ---------- markets ----------
@@ -328,8 +410,8 @@ async function ntfy(title, body, click, tags = 'newspaper', priority = 3) {
 async function main() {
   const prevNews = await readJson('news.json', null);
   const prevMarkets = await readJson('markets.json', null);
-  const cache = await readJson('summaries.json', {});
-  const state = await readJson('state.json', { alerted: [], briefDate: '' });
+  const cache = await readJson('summaries.json', {}, CACHE);
+  const state = await readJson('state.json', { alerted: [], briefDate: '' }, CACHE);
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
     const lists = await Promise.all(sec.feeds.map(loadFeed));
@@ -376,12 +458,15 @@ async function main() {
   }
   // Quick 60: must-know first, then top 3-4 per section
   const q = new Set(mustKnow);
-  for (const sec of SECTIONS) for (const s of all.filter((x) => x.section === sec.id).slice(0, sec.id === 'mumbai' ? 5 : 3)) q.add(s.id);
-  const quick60 = [...q].slice(0, 45);
+  const bySec = SECTIONS.map((sec) => all.filter((x) => x.section === sec.id));
+  for (let r = 0; r < 8; r++) for (const [k, list] of bySec.entries()) { const take = SECTIONS[k].id === 'mumbai' ? 2 : 1; for (const s of list.slice(r * take, r * take + take)) q.add(s.id); }
+  const quick60 = [...q].slice(0, 90);
 
-  const toSummarise = all.filter((s) => q.has(s.id) || s.n >= 2).slice(0, 140);
+  const topPerSec = new Set(SECTIONS.flatMap((sec) => all.filter((x) => x.section === sec.id).slice(0, 12).map((x) => x.id)));
+  const toSummarise = all.filter((s) => q.has(s.id) || topPerSec.has(s.id) || s.n >= 3).slice(0, 220);
+  await enrich(toSummarise, cache);
   await summarise(toSummarise, cache);
-  for (const s of all) { if (!s.summary) s.summary = s.desc ? words(s.desc, 60) : ''; delete s.desc; delete s.alt; }
+  for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; delete s.desc; delete s.alt; delete s.body; delete s.links; }
 
   const [mk, vids] = await Promise.all([markets(prevMarkets), videos()]);
 
@@ -391,7 +476,7 @@ async function main() {
   if (all.length < 20 && prevNews?.stories?.length) { log('Too few stories this run, keeping previous news'); }
   else await writeJson('news.json', news);
   await writeJson('markets.json', mk);
-  await writeJson('summaries.json', cache);
+  await writeJson('summaries.json', cache, CACHE);
 
   // Alerts
   const ist = new Date(NOW + 5.5 * 3.6e6);
@@ -412,7 +497,7 @@ async function main() {
     }
   }
   state.alerted = state.alerted.slice(-200);
-  await writeJson('state.json', state);
+  await writeJson('state.json', state, CACHE);
 
   log(`feeds ok ${news.stats.ok}/${news.stats.feeds}, items ${news.stats.items}, stories ${all.length}, checks ${checks.length}, quotes ${Object.keys(mk?.quotes || {}).length}, videos ${vids.length}`);
   for (const f of feedStats) if (!f.ok || f.n === 0) log('  feed issue:', f.ok ? '0 items' : f.err, f.url.slice(0, 110));

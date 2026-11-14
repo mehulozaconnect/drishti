@@ -79,6 +79,11 @@ export const SECTIONS = [
       g('site:indianexpress.com Mumbai'),
       'https://www.thehindu.com/news/cities/mumbai/feeder/default.rss',
       'https://www.freepressjournal.in/stories.rss?section=mumbai',
+      'https://www.mid-day.com/Resources/midday/rss/mumbai-news.xml',
+      'https://www.mid-day.com/rss/mumbai-news.xml',
+      g('site:mid-day.com Mumbai'),
+      g('site:freepressjournal.in Mumbai'),
+      g('site:freepressjournal.in Malad OR Kandivali OR Goregaon OR Borivali'),
       g('Malad Mumbai'),
       g('Kandivali OR Goregaon OR Borivali Mumbai'),
       g('Mumbai local train Western Railway'),
@@ -89,6 +94,7 @@ export const SECTIONS = [
     id: 'india', name: 'India', short: 'India', color: '#3A2A12', tint: '#FFC48A', icon: 'flag', weight: 1.1,
     feeds: [
       'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',
+      'https://www.freepressjournal.in/stories.rss?section=india',
       'https://www.thehindu.com/news/national/feeder/default.rss',
       g('site:indianexpress.com India'),
       'https://feeds.feedburner.com/ndtvnews-top-stories',
@@ -100,6 +106,7 @@ export const SECTIONS = [
     id: 'world', name: 'World', short: 'World', color: '#12203D', tint: '#9DB8F5', icon: 'globe', weight: 1.1,
     feeds: [
       'https://feeds.bbci.co.uk/news/world/rss.xml',
+      'https://www.freepressjournal.in/stories.rss?section=world',
       'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml',
       'https://www.aljazeera.com/xml/rss/all.xml',
       'https://www.thehindu.com/news/international/feeder/default.rss',
@@ -114,6 +121,7 @@ export const SECTIONS = [
     id: 'markets', name: 'Markets and economy', short: 'Markets', color: '#221A3F', tint: '#C7BAFF', icon: 'chart', weight: 1.15,
     feeds: [
       'https://www.livemint.com/rss/markets',
+      'https://www.freepressjournal.in/stories.rss?section=business',
       'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
       g('site:moneycontrol.com markets'),
       g('site:business-standard.com markets'),
@@ -144,6 +152,7 @@ export const SECTIONS = [
     id: 'bollywood', name: 'Bollywood', short: 'Bollywood', color: '#4A1530', tint: '#FF9CC6', icon: 'star', weight: 0.85,
     feeds: [
       'https://www.hindustantimes.com/feeds/rss/entertainment/bollywood/rssfeed.xml',
+      'https://www.freepressjournal.in/stories.rss?section=entertainment',
       g('site:indianexpress.com Bollywood'),
       'https://timesofindia.indiatimes.com/rssfeeds/1081479906.cms',
       g('Bollywood')
@@ -180,6 +189,7 @@ export const SECTIONS = [
     id: 'gadgets', name: 'Gadgets and tech', short: 'Gadgets', color: '#16262B', tint: '#7FE3E0', icon: 'chip', weight: 0.75,
     feeds: [
       'https://www.theverge.com/rss/index.xml',
+      'https://www.freepressjournal.in/stories.rss?section=tech',
       'https://www.engadget.com/rss.xml',
       g('site:indianexpress.com technology gadgets'),
       'https://www.livemint.com/rss/technology',
@@ -191,6 +201,7 @@ export const SECTIONS = [
     id: 'health', name: 'Health', short: 'Health', color: '#143A26', tint: '#7BF0B4', icon: 'pulse', weight: 0.95,
     feeds: [
       'https://www.who.int/rss-feeds/news-english.xml',
+      'https://www.freepressjournal.in/stories.rss?section=lifestyle',
       'https://feeds.bbci.co.uk/news/health/rss.xml',
       'https://www.thehindu.com/sci-tech/health/feeder/default.rss',
       g('site:indianexpress.com health'),
@@ -203,6 +214,7 @@ export const SECTIONS = [
     id: 'spiritual', name: 'Spiritual', short: 'Spiritual', color: '#3D2410', tint: '#FFC48A', icon: 'lotus', weight: 0.6,
     feeds: [
       g('spiritual India'),
+      g('site:freepressjournal.in spiritual OR festival OR temple'),
       g('temple OR festival OR puja Mumbai'),
       g('Siddhivinayak OR Mahalaxmi OR ISKCON Mumbai')
     ]
