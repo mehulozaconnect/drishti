@@ -196,7 +196,7 @@ const POLITICAL = /\b(fir|jawan|crpf|bjp|congress|rahul gandhi|modi|amit shah|mi
 const FASHION = /\b(fashion|style|stylish|outfit|look|looks|dressed|designer|red carpet|bandhgala|saree|lehenga|brooch(es)?|gown|couture|manish malhotra|sabyasachi|celebrity|celebs?|airport look)\b/i;
 const FEED_TRUSTED_TOPIC = new Set(['sports', 'markets', 'money']);
 const FILM = /\b(film|films|movie|movies|cinema|ott|box office|trailer|teaser|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|actor|actress|director|series|bollywood|tollywood|kollywood|movie review|film review|starrer|biopic|sequel|bigg boss|iffi|ramayana)\b/i;
-KW.spiritual = /\b(temple|puja|pooja|spiritual|devotees?|pilgrims?|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|kharna|prasad|katha|nahay)\b/i;
+KW.spiritual = /\b(temple|puja|pooja|spiritual|devotees?|pilgrims?|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|kharna|prasad|katha|nahay)\b/i;
 const TOPICAL = new Set(['markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
 function chooseSection(c) {
@@ -333,6 +333,7 @@ function extractive(text, fallback) {
 // drop a repeated headline at the start of a summary ("Headline | Text" or "Headline. Text")
 function stripTitle(sum, title) {
   if (!sum) return sum;
+  sum = sum.replace(/^(canva( ai)?|representative image|representational image|file (photo|pic|image)|ai[- ]generated( image)?|pinterest|instagram|unsplash|freepik|istock|getty images|pti|ani|ians|x|twitter)\b[\s.:|-]+/i, '');
   const bar = sum.indexOf(' | ');
   if (bar > 15 && bar < 220 && similar(tokens(sum.slice(0, bar)), tokens(title)) > 0.5) sum = sum.slice(bar + 3);
   const cap = /^(.{10,260}?) \| ([A-Z][\w.&-]*(?:[ ,]+[A-Z][\w.&-]*){0,2}) (?=[A-Z])/.exec(sum); // photo caption + credit

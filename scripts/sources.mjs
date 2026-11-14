@@ -265,8 +265,8 @@ export const SECTIONS = [
   },
   {
     id: 'spiritual', name: 'Spiritual', short: 'Spiritual', color: '#3D2410', tint: '#FFC48A', icon: 'lotus', weight: 0.6,
-    require: /\b(temple|puja|pooja|spiritual|devotee|pilgrim|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|pandharpur|vaishno devi|kedarnath|sabarimala|jagannath)\b/i,
-    exclude: /(murder|basketball|ncaa|betting|app case|cbi|arrest|scam|fraud|ed raid|police|bjp|congress|shiv sena|mns|thackeray|politic|row over|alleg|mishap|accident|killed|dies|death|wedding|traffic|actor|actress|box office|prices?|parties|cricket|samson|threat)/i,
+    require: /\b(temple|puja|pooja|spiritual|devotee|pilgrim|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|pandharpur|vaishno devi|kedarnath|sabarimala|jagannath)\b/i,
+    exclude: /(ambassador|uscirf|commission|freedom body|activist|jailed|government|govt|diplomat|minister|court|murder|basketball|ncaa|betting|app case|cbi|arrest|scam|fraud|ed raid|police|bjp|congress|shiv sena|mns|thackeray|politic|row over|alleg|mishap|accident|killed|dies|death|wedding|traffic|actor|actress|box office|prices?|parties|cricket|samson|threat)/i,
     feeds: [
       g('spiritual India'),
       g('site:freepressjournal.in spiritual OR festival OR temple'),
