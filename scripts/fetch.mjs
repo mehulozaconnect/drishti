@@ -193,6 +193,8 @@ const KW = {
   sports: /\b(cricket|ipl|test|odi|t20|bcci|icc|football|fifa|isl|hockey|tennis|badminton|olympics?|kabaddi|chess|f1|formula 1|athlet\w*|wickets?|innings|century|squad|coach|tournament|league|match|medal|world cup|grand prix|boxing|wrestling|kohli|rohit|gill|bumrah|dhoni|asia cup|u-?19|ranji|smat)\b/i
 };
 const POLITICAL = /\b(bjp|congress|rahul gandhi|modi|amit shah|minister|ministers|mla|mp|cbi|ed raid|police|arrest|arrested|court|judge|custody|election|polls?|murder|killed|scam|betting|thackeray|shiv sena)\b/i;
+const FASHION = /\b(fashion|style|stylish|outfit|look|looks|dressed|designer|red carpet|bandhgala|saree|lehenga|brooch(es)?|gown|couture|manish malhotra|sabyasachi|celebrity|celebs?|airport look)\b/i;
+const FEED_TRUSTED_TOPIC = new Set(['sports', 'phones', 'markets', 'money']);
 const TOPICAL = new Set(['markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
 function chooseSection(c) {
@@ -211,10 +213,12 @@ function chooseSection(c) {
     else if (id === 'mumbai') ok = hits > 0;
     else if (id === 'world') ok = hits > 0 && !KW.mumbai.test(titles);
     else if (POLITICAL.test(titles) && !['markets', 'money', 'sports', 'gold'].includes(id)) ok = false; // politics and crime are news, not lifestyle or tech
-    else ok = hits >= 2 || (hits >= 1 && (votes[id] || 0) >= 1) || (votes[id] || 0) >= 3; // keyword plus the topic's own feed, or a trusted topic feed
+    else if (id === 'health' && FASHION.test(titles)) ok = false; // fashion and celebrity style are not health
+    else ok = hits >= 2 || (hits >= 1 && (votes[id] || 0) >= 1) || ((votes[id] || 0) >= 3 && FEED_TRUSTED_TOPIC.has(id)); // keyword plus the topic's own feed
     if (!ok) continue;
     let score = (votes[id] || 0) + Math.min(hits, 4) * (TOPICAL.has(id) ? 3 : 2);
     if (id === 'india') score -= 1; // general bucket loses ties
+    if (TOPICAL.has(id) && hits < 2 && KW.mumbai.test(titles)) score -= 4; // a Mumbai story with only a passing topic word stays in Mumbai
     if (id === 'knowledge' && sec.require.test(titles)) score += 3;
     if (score > bestScore) { bestScore = score; best = sec; }
   }
