@@ -29,8 +29,8 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: .cache
-          key: drishti-cache2-${{ github.run_id }}
-          restore-keys: drishti-cache2-
+          key: drishti-cache3-${{ github.run_id }}
+          restore-keys: drishti-cache3-
       - name: Fetch news and markets
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -42,7 +42,7 @@ jobs:
         if: always()
         with:
           path: .cache
-          key: drishti-cache2-${{ github.run_id }}
+          key: drishti-cache3-${{ github.run_id }}
       - name: Save data
         run: |
           git config user.name "drishti-bot"

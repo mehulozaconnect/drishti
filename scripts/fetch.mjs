@@ -202,6 +202,7 @@ function buildStory(c, section) {
     time: newest,
     first,
     links: c.items.map((i) => i.link).filter((l) => !l.includes('news.google.com')).slice(0, 3),
+    glinks: c.items.map((i) => i.link).filter((l) => l.includes('news.google.com')).slice(0, 3),
     local: !!isLocal,
     breaking: BREAKING.test(lead.title) && ageH < 6,
     score: Math.round(score * 1000) / 1000
@@ -236,7 +237,7 @@ async function decodeGoogle(url) {
     return /^https?:\/\//.test(u) ? u : null;
   } catch { return null; }
 }
-const BOILER = /(also read|read more|click here|subscribe|follow us|download the app|all rights reserved|©|cookie|advertisement|newsletter|whatsapp channel|join our|sign up|log in|reported by|edited by|updated on|first published|for more news|stay updated|google news)/i;
+const BOILER = /(photo:|photo credit|file photo|image:|image credit|representational|screengrab|also read|read more|click here|subscribe|follow us|download the app|all rights reserved|©|cookie|advertisement|newsletter|whatsapp channel|join our|sign up|log in|reported by|edited by|updated on|first published|for more news|stay updated|google news)/i;
 function extractArticle(html) {
   const meta = (k) => new RegExp(`<meta[^>]+(?:property|name)=["']${k}["'][^>]+content=["']([^"']+)["']`, 'i').exec(html)?.[1] || new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${k}["']`, 'i').exec(html)?.[1];
   let image = meta('og:image') || meta('twitter:image');
@@ -277,17 +278,23 @@ async function enrich(stories, cache) {
   let ok = 0, dec = 0;
   await pool(need, 8, async (s) => {
     const c = cache[s.id] ||= { n: 0, at: NOW };
-    const cands = [...(s.links || [])];
-    if (s.link.includes('news.google.com')) { const d = await decodeGoogle(s.link); if (d) { cands.push(d); dec++; } }
-    else if (!cands.includes(s.link)) cands.unshift(s.link);
-    c.url = cands[0] || null; c.text = '';
-    for (const u of cands.slice(0, 3)) {
+    const direct = [...new Set([...(s.link.includes('news.google.com') ? [] : [s.link]), ...(s.links || [])])];
+    const tryUrl = async (u) => {
       try {
         const a = extractArticle(await fetchText(u, 10000, { Accept: 'text/html' }));
         if (a.image && !c.img) c.img = a.image;
         if (a.ogd && !c.ogd) c.ogd = a.ogd;
-        if (a.text.length > 150) { c.text = a.text; c.url = u; ok++; break; }
-      } catch { /* blocked or slow, try the next outlet */ }
+        if (a.text.length > 150) { c.text = a.text; c.url = u; ok++; return true; }
+      } catch { /* blocked or slow */ }
+      return false;
+    };
+    c.url = direct[0] || null; c.text = '';
+    let done = false;
+    for (const u of direct.slice(0, 3)) if ((done = await tryUrl(u))) break;
+    if (!done) for (const g of (s.glinks || []).slice(0, 2)) {
+      const u = await decodeGoogle(g); if (!u) continue; dec++;
+      if (!c.url) c.url = u;
+      if ((done = await tryUrl(u))) break;
     }
   });
   log(`enrich: ${need.length} new, ${dec} google links decoded, ${ok} articles read`);
@@ -467,7 +474,7 @@ async function main() {
   const toSummarise = all.filter((s) => q.has(s.id) || topPerSec.has(s.id) || s.n >= 3).slice(0, 220);
   await enrich(toSummarise, cache);
   await summarise(toSummarise, cache);
-  for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; delete s.desc; delete s.alt; delete s.body; delete s.links; }
+  for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; delete s.desc; delete s.alt; delete s.body; delete s.links; delete s.glinks; }
 
   const [mk, vids] = await Promise.all([markets(prevMarkets), videos()]);
 
