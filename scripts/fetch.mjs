@@ -206,6 +206,8 @@ function chooseSection(c) {
   const tl = c.items.map((i) => i.title); const political = tl.filter((t) => POLITICAL.test(t)).length > tl.length / 2; // most outlets frame it as politics or crime
   const votes = {};
   for (const i of c.items) votes[i.origin] = (votes[i.origin] || 0) + (i.google ? 1 : 3);
+  // event listings found by the events searches go straight to Things to do
+  if ((votes.events || 0) >= 1 && !political && KW.events.test(titles) && KW.mumbai.test(titles)) return SEC_BY_ID.events;
   let best = null, bestScore = -1, strongTopic = null, strongScore = -1;
   for (const sec of SECTIONS) {
     const id = sec.id;
@@ -558,7 +560,7 @@ async function main() {
   { const bad = new Set(toSummarise.filter((x) => cache[x.id]?.bad || COMMENTS.test(x.link)).map((x) => x.id)); if (bad.size) { all = all.filter((x) => !bad.has(x.id)); log('dropped comment-page stories', bad.size); } }
   await summarise(toSummarise, cache);
   for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; s.summary = stripTitle(s.summary, s.title); delete s.desc; delete s.alt; delete s.body; delete s.links; delete s.glinks; }
-  { const before = all.length; all = all.filter((s) => (s.summary || '').split(/\s+/).length >= 40); log(`kept ${all.length} of ${before} stories with a full summary`); }
+  { const before = all.length; all = all.filter((s) => (s.summary || '').split(/\s+/).length >= (s.section === 'events' ? 25 : 40)); log(`kept ${all.length} of ${before} stories with a full summary`); }
   for (const sec of sections) sec.count = all.filter((x) => x.section === sec.id).length;
   { const ids = new Set(all.map((x) => x.id)); for (let i = mustKnow.length - 1; i >= 0; i--) if (!ids.has(mustKnow[i])) mustKnow.splice(i, 1); for (let i = quick60.length - 1; i >= 0; i--) if (!ids.has(quick60[i])) quick60.splice(i, 1); }
 

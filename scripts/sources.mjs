@@ -88,7 +88,7 @@ export const TRUSTED = {
   'lokmat.com': 'Lokmat'
 };
 
-const g = (q) => `https://news.google.com/rss/search?q=${encodeURIComponent(q + ' when:2d')}&hl=en-IN&gl=IN&ceid=IN:en`;
+const g = (q, days = 2) => `https://news.google.com/rss/search?q=${encodeURIComponent(q + ' when:' + days + 'd')}&hl=en-IN&gl=IN&ceid=IN:en`;
 
 export const SECTIONS = [
   {
@@ -274,18 +274,18 @@ export const SECTIONS = [
   {
     id: 'events', name: 'Things to do in Mumbai', short: 'Things to do', color: '#2B1F3D', tint: '#E2C6FF', icon: 'ticket', weight: 0.7,
     feeds: [
-      g('things to do in Mumbai this weekend'),
-      g('Mumbai weekend events'),
-      g('Mumbai events this week tickets'),
-      g('Mumbai concert OR gig OR live music'),
-      g('Mumbai exhibition OR art show OR museum'),
-      g('Mumbai kids activities OR workshop OR children'),
-      g('Mumbai stand-up comedy show OR play theatre'),
-      g('Mumbai food festival OR flea market OR pop-up'),
-      g('site:mid-day.com things to do Mumbai'),
-      g('site:hindustantimes.com Mumbai weekend'),
-      g('site:timeout.com Mumbai'),
-      g('site:lbb.in Mumbai')
+      g('things to do in Mumbai this weekend', 7),
+      g('Mumbai weekend events', 7),
+      g('Mumbai events this week tickets', 7),
+      g('Mumbai concert OR gig OR live music', 7),
+      g('Mumbai exhibition OR art show OR museum', 7),
+      g('Mumbai kids activities OR workshop OR children', 7),
+      g('Mumbai stand-up comedy show OR play theatre', 7),
+      g('Mumbai food festival OR flea market OR pop-up', 7),
+      g('site:mid-day.com things to do Mumbai', 7),
+      g('site:hindustantimes.com Mumbai weekend', 7),
+      g('site:timeout.com Mumbai', 7),
+      g('site:lbb.in Mumbai', 7)
     ]
   },
   {
