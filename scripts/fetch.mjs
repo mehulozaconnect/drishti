@@ -271,6 +271,15 @@ function extractive(text, fallback) {
   for (const x of sents) { const next = (out + ' ' + x.trim()).trim(); if (next.split(' ').length > 72 && out) break; out = next; if (out.split(' ').length >= 48) break; }
   return words(out, 75);
 }
+// drop a repeated headline at the start of a summary ("Headline | Text" or "Headline. Text")
+function stripTitle(sum, title) {
+  if (!sum) return sum;
+  const bar = sum.indexOf(' | ');
+  if (bar > 15 && bar < 220 && similar(tokens(sum.slice(0, bar)), tokens(title)) > 0.5) sum = sum.slice(bar + 3);
+  const t = title.toLowerCase().slice(0, 40);
+  if (sum.toLowerCase().startsWith(t)) { const cut = sum.slice(title.length).replace(/^[\s.:|–—-]+/, ''); if (cut.length > 60) sum = cut; }
+  return sum.trim();
+}
 async function pool(items, n, fn) { const q = [...items]; await Promise.all(Array.from({ length: n }, async () => { while (q.length) await fn(q.shift()); })); }
 
 async function enrich(stories, cache) {
@@ -346,6 +355,7 @@ ${batch.map((s) => JSON.stringify({ id: s.id, headlines: [s.title, ...(s.alt || 
     const c = cache[s.id];
     if (c?.summary) { s.summary = c.summary; if (c.headline) s.headline = c.headline; s.ai = !!c.ai; }
     else s.summary = extractive(s.body, s.desc);
+    s.summary = stripTitle(s.summary, s.title);
   }
   // drop cache entries older than 4 days
   for (const k of Object.keys(cache)) { if (NOW - (cache[k].at || 0) > 3 * 864e5) delete cache[k]; else if (cache[k].text) cache[k].text = cache[k].text.slice(0, 1300); }

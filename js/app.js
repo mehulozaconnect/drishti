@@ -106,7 +106,10 @@ async function loadData(force) {
   const bust = force ? '?t=' + Date.now() : '?t=' + Math.floor(Date.now() / 3e5);
   try {
     const [n, m] = await Promise.all([fetch('data/news.json' + bust).then((r) => r.ok ? r.json() : null), fetch('data/markets.json' + bust).then((r) => r.ok ? r.json() : null).catch(() => null)]);
-    if (n) { S.news = n; S.byId = Object.fromEntries(n.stories.map((s) => [s.id, s])); }
+    if (n) {
+      for (const s of n.stories) { const sm = s.summary || ''; const bar = sm.indexOf(' | '); if (bar > 15 && bar < 220 && s.title.toLowerCase().includes(sm.slice(0, Math.min(bar, 30)).toLowerCase())) s.summary = sm.slice(bar + 3); }
+      S.news = n; S.byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
+    }
     if (m) S.markets = m;
   } catch (e) { console.warn(e); }
 }
@@ -214,7 +217,7 @@ function viewHome() {
   const th = THOUGHTS[dayIndex() % THOUGHTS.length]; const tp = TIPS[dayIndex() % TIPS.length];
   const forYou = S.settings.sections.map((id) => {
     const list = take(secStories(id), 3); if (!list.length) return ''; const m = secMeta(id);
-    return `<div class="sec-head"><a class="h2 row gap8" href="#section/${id}"><span class="sdot" style="background:${m.color};color:${m.tint}">${ic(m.icon, 16, 2)}</span>${esc(m.name)}</a><a href="#section/${id}">See all</a></div><div>${list[0].summary && list[0].image ? storyCard(list[0]) + list.slice(1).map(storyRow).join('') : list.map(storyRow).join('')}</div>`;
+    return `<div class="sec-head"><a class="h2 row gap8" href="#section/${id}" style="color:var(--text)"><span class="sdot" style="background:${m.color};color:${m.tint}">${ic(m.icon, 16, 2)}</span>${esc(m.name)}</a><a href="#section/${id}">See all</a></div><div>${list[0].summary && list[0].image ? storyCard(list[0]) + list.slice(1).map(storyRow).join('') : list.map(storyRow).join('')}</div>`;
   }).join('');
   const upd = new Date(n.updated).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
   return `${header()}
