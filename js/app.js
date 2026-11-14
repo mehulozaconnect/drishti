@@ -107,7 +107,7 @@ async function loadData(force) {
   try {
     const [n, m] = await Promise.all([fetch('data/news.json' + bust).then((r) => r.ok ? r.json() : null), fetch('data/markets.json' + bust).then((r) => r.ok ? r.json() : null).catch(() => null)]);
     if (n) {
-      for (const s of n.stories) { const sm = s.summary || ''; const bar = sm.indexOf(' | '); if (bar > 15 && bar < 220 && s.title.toLowerCase().includes(sm.slice(0, Math.min(bar, 30)).toLowerCase())) s.summary = sm.slice(bar + 3); }
+      for (const s of n.stories) { const sm = s.summary || ''; const bar = sm.indexOf(' | '); if (bar > 15 && bar < 220 && s.title.toLowerCase().includes(sm.slice(0, Math.min(bar, 30)).toLowerCase())) s.summary = sm.slice(bar + 3); const cap = /^(.{10,260}?) \| ([A-Z][\w.&-]*(?:[ ,]+[A-Z][\w.&-]*){0,2}) (?=[A-Z])/.exec(s.summary || ''); if (cap && s.summary.length - cap[0].length > 80) s.summary = s.summary.slice(cap[0].length); }
       S.news = n; S.byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
     }
     if (m) S.markets = m;

@@ -276,6 +276,8 @@ function stripTitle(sum, title) {
   if (!sum) return sum;
   const bar = sum.indexOf(' | ');
   if (bar > 15 && bar < 220 && similar(tokens(sum.slice(0, bar)), tokens(title)) > 0.5) sum = sum.slice(bar + 3);
+  const cap = /^(.{10,260}?) \| ([A-Z][\w.&-]*(?:[ ,]+[A-Z][\w.&-]*){0,2}) (?=[A-Z])/.exec(sum); // photo caption + credit
+  if (cap && sum.length - cap[0].length > 80) sum = sum.slice(cap[0].length);
   const t = title.toLowerCase().slice(0, 40);
   if (sum.toLowerCase().startsWith(t)) { const cut = sum.slice(title.length).replace(/^[\s.:|–—-]+/, ''); if (cut.length > 60) sum = cut; }
   return sum.trim();
