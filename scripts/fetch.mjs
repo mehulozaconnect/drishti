@@ -464,6 +464,8 @@ async function main() {
   all = kept;
 
   const checks = clusterItems(checkItems).map((c) => c.items[0]).slice(0, 25).map((c) => ({ title: c.title, publisher: c.publisher, link: c.link, time: c.time }));
+  // fact-checks from Google News: turn redirect links into the real BOOM / Alt News / PIB article links
+  await pool(checks.slice(0, 15).filter((c) => c.link.includes('news.google.com')), 5, async (c) => { const u = await decodeGoogle(c.link); if (u) c.link = u; });
   attachFactChecks(all, checks.map((c) => ({ ...c })));
 
   // Must know: best stories overall, at most 3 per section, multi-source preferred
