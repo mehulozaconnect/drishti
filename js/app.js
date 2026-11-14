@@ -134,7 +134,7 @@ async function loadWeather(force) {
 
 // ---------- shared bits ----------
 const AV_COLORS = ['#FF8A3D', '#E8E6E1', '#E05252', '#C9A227', '#5BA4F5', '#7BD88F', '#C7BAFF', '#FF9CC6', '#7FE3E0'];
-const initials = (n) => n.replace(/^The /, '').split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase();
+const initials = (n) => n.replace(/^The /, '').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 const avColor = (n) => AV_COLORS[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
 const avatars = (srcs, max = 4) => `<div class="row" style="gap:0">${srcs.slice(0, max).map((s) => `<span class="av" style="background:${avColor(s.name)}">${esc(initials(s.name))}</span>`).join('')}</div>`;
 const verify = (s) => s.factCheck ? `<span class="badge b-bad">${ic('alert', 12, 2.2)}Related fact-check</span>` : s.n >= 2 ? `<span class="badge b-ok">${ic('shield', 12, 2.2)}Confirmed by ${s.n} sources</span>` : `<span class="badge b-one">Single source</span>`;
