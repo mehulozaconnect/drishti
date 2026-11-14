@@ -87,7 +87,7 @@ function similar(a, b) {
   const ov = inter / Math.min(wa, wb);
   return Math.max(j, ov * 0.7);
 }
-const JUNK = /wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
+const JUNK = /^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
 const words = (s, n) => { const w = s.split(/\s+/); return w.length <= n ? s : w.slice(0, n).join(' ').replace(/[,;:]$/, '') + '…'; };
 const hash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 12);
 
@@ -189,13 +189,14 @@ const KW = {
   viral: /\b(viral|trending|internet|netizens|social media|video shows|caught on camera|instagram|reddit|meme|watch video|goes viral|x users)\b/i,
   phones: /\b(phone|phones|smartphone|iphone|galaxy|pixel|oneplus|xiaomi|redmi|vivo|oppo|realme|poco|motorola|nothing phone|iqoo|honor|huawei|android|ios|tablet|ipad|5g phone|flip|fold)\b/i,
   gadgets: /\b(ai|artificial intelligence|chatgpt|openai|gemini|google|microsoft|apple|meta|tech|technology|software|app|apps|startup|laptop|chip|chips|nvidia|semiconductor|cyber|hack|hackers|outage|robot|ev|electric vehicle|tesla|spacex|isro|satellite|gadget|smartwatch|earbuds|wearable|internet|data centre|elon musk)\b/i,
-  health: /\b(health|healthy|hospital|doctors?|disease|dengue|malaria|covid|virus|vaccine|cancer|diabetes|heart|fitness|diet|nutrition|sleep|mental health|yoga|wellness|skin|hair|weight loss|exercise|ayurved\w*|medicine|medical|drug|who|icmr|lifestyle|food|foods|recipe|parenting|pregnan\w*|aqi|pollution|air quality)\b/i,
+  health: /\b(health|healthy|hospital|doctors?|disease|dengue|malaria|covid|virus|vaccine|cancer|diabetes|heart|fitness|diet|nutrition|sleep|mental health|yoga|wellness|skin|hair|weight loss|exercise|ayurved\w*|medicine|medical|drug|icmr|lifestyle|food|foods|recipe|parenting|pregnan\w*|aqi|pollution|air quality)\b/i,
   sports: /\b(cricket|ipl|test|odi|t20|bcci|icc|football|fifa|isl|hockey|tennis|badminton|olympics?|kabaddi|chess|f1|formula 1|athlet\w*|wickets?|innings|century|squad|coach|tournament|league|match|medal|world cup|grand prix|boxing|wrestling|kohli|rohit|gill|bumrah|dhoni|asia cup|u-?19|ranji|smat)\b/i
 };
+const POLITICAL = /\b(bjp|congress|rahul gandhi|modi|amit shah|minister|ministers|mla|mp|cbi|ed raid|police|arrest|arrested|court|judge|custody|election|polls?|murder|killed|scam|betting|thackeray|shiv sena)\b/i;
 const TOPICAL = new Set(['markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
 function chooseSection(c) {
-  const text = c.items.map((i) => i.title).join(' . ') + ' ' + (c.items.find((i) => i.desc)?.desc || '').slice(0, 300);
+  const text = c.items.map((i) => i.title).join(' . ');
   const titles = c.items.map((i) => i.title).join(' . ');
   const votes = {};
   for (const i of c.items) votes[i.origin] = (votes[i.origin] || 0) + (i.google ? 1 : 3);
@@ -209,7 +210,8 @@ function chooseSection(c) {
     else if (id === 'knowledge' || id === 'spiritual') ok = sec.require.test(titles);
     else if (id === 'mumbai') ok = hits > 0;
     else if (id === 'world') ok = hits > 0 && !KW.mumbai.test(titles);
-    else ok = hits > 0 || (votes[id] || 0) >= 3; // a trusted topic feed also counts
+    else if (POLITICAL.test(titles) && !['markets', 'money', 'sports', 'gold'].includes(id)) ok = false; // politics and crime are news, not lifestyle or tech
+    else ok = hits >= 2 || (hits >= 1 && (votes[id] || 0) >= 1) || (votes[id] || 0) >= 3; // keyword plus the topic's own feed, or a trusted topic feed
     if (!ok) continue;
     let score = (votes[id] || 0) + Math.min(hits, 4) * (TOPICAL.has(id) ? 3 : 2);
     if (id === 'india') score -= 1; // general bucket loses ties
