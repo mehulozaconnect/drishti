@@ -187,7 +187,7 @@ function buildStory(c, section) {
   const ageH = (NOW - newest) / 3.6e6;
   const n = pubs.length;
   let score = (1 + Math.log2(n) * 2.2) * section.weight;
-  score *= Math.exp(-ageH / 14);
+  score *= Math.exp(-ageH / (section.id === 'knowledge' ? 72 : 14));
   if (BREAKING.test(lead.title)) score *= 1.35;
   if (isLocal) score *= 1.5;
   return {
@@ -423,7 +423,7 @@ async function main() {
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
     const lists = await Promise.all(sec.feeds.map(loadFeed));
-    const maxAge = (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
+    const maxAge = sec.id === 'knowledge' ? 168 : (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
     return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title));
   }));
   const checkItems = (await Promise.all(FACTCHECK_FEEDS.map(loadFeed))).flat().filter((i) => NOW - i.time < 7 * 864e5);

@@ -64,7 +64,20 @@ export const TRUSTED = {
   'altnews.in': 'Alt News',
   'factly.in': 'Factly',
   'vishvasnews.com': 'Vishvas News',
-  'youtube.com': 'YouTube'
+  'youtube.com': 'YouTube',
+  'espncricinfo.com': 'ESPNcricinfo',
+  'cricbuzz.com': 'Cricbuzz',
+  'sportstar.thehindu.com': 'Sportstar',
+  'theconversation.com': 'The Conversation',
+  'vox.com': 'Vox',
+  'theprint.in': 'ThePrint',
+  'firstpost.com': 'Firstpost',
+  'downtoearth.org.in': 'Down To Earth',
+  'nationalgeographic.com': 'National Geographic',
+  'healthshots.com': 'HealthShots',
+  'vogue.in': 'Vogue India',
+  'gqindia.com': 'GQ India',
+  'lifestyleasia.com': 'Lifestyle Asia'
 };
 
 const g = (q) => `https://news.google.com/rss/search?q=${encodeURIComponent(q + ' when:2d')}&hl=en-IN&gl=IN&ceid=IN:en`;
@@ -185,7 +198,7 @@ export const SECTIONS = [
     ]
   },
   {
-    id: 'gadgets', name: 'Gadgets and tech', short: 'Gadgets', color: '#16262B', tint: '#7FE3E0', icon: 'chip', weight: 0.75,
+    id: 'gadgets', name: 'Technology', short: 'Tech', color: '#16262B', tint: '#7FE3E0', icon: 'chip', weight: 0.75,
     feeds: [
       'https://www.theverge.com/rss/index.xml',
       'https://www.freepressjournal.in/stories.rss?section=tech',
@@ -197,7 +210,7 @@ export const SECTIONS = [
     ]
   },
   {
-    id: 'health', name: 'Health', short: 'Health', color: '#143A26', tint: '#7BF0B4', icon: 'pulse', weight: 0.95,
+    id: 'health', name: 'Health and lifestyle', short: 'Health', color: '#143A26', tint: '#7BF0B4', icon: 'pulse', weight: 0.95,
     feeds: [
       'https://www.who.int/rss-feeds/news-english.xml',
       'https://www.freepressjournal.in/stories.rss?section=lifestyle',
@@ -206,7 +219,43 @@ export const SECTIONS = [
       g('site:indianexpress.com health'),
       g('Mumbai health OR dengue OR malaria OR hospital'),
       g('health study India'),
-      g('ICMR OR health ministry advisory')
+      g('ICMR OR health ministry advisory'),
+      'https://www.hindustantimes.com/feeds/rss/lifestyle/health/rssfeed.xml',
+      'https://www.hindustantimes.com/feeds/rss/lifestyle/rssfeed.xml',
+      g('site:indianexpress.com lifestyle'),
+      g('fitness diet sleep tips study'),
+      g('site:healthshots.com')
+    ]
+  },
+  {
+    id: 'sports', name: 'Sports', short: 'Sports', color: '#16301A', tint: '#9BE38F', icon: 'trophy', weight: 0.85,
+    feeds: [
+      'https://www.espncricinfo.com/rss/content/story/feeds/0.xml',
+      'https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml',
+      'https://www.hindustantimes.com/feeds/rss/sports/rssfeed.xml',
+      'https://timesofindia.indiatimes.com/rssfeeds/4719148.cms',
+      'https://www.thehindu.com/sport/feeder/default.rss',
+      'https://feeds.bbci.co.uk/sport/rss.xml',
+      'https://www.freepressjournal.in/stories.rss?section=sports',
+      g('India cricket'),
+      g('IPL OR ISL OR Olympics India'),
+      g('football OR tennis OR badminton India')
+    ]
+  },
+  {
+    id: 'knowledge', name: 'Knowledge', short: 'Knowledge', color: '#1E2A44', tint: '#A9C4FF', icon: 'bulb', weight: 0.7,
+    feeds: [
+      g('site:indianexpress.com explained'),
+      g('site:thehindu.com explained'),
+      g('site:timesofindia.indiatimes.com explained OR "explained:"'),
+      g('site:hindustantimes.com explainer'),
+      g('site:livemint.com explained'),
+      g('site:bbc.com explainer OR "what we know"'),
+      g('site:theprint.in explained OR ThePrint explainer'),
+      g('why OR how explained science history economy'),
+      'https://theconversation.com/in/articles.atom',
+      'https://www.vox.com/rss/explainers/index.xml',
+      'https://www.downtoearth.org.in/rss/all'
     ]
   },
   {

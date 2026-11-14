@@ -63,24 +63,41 @@ const P = {
   book: '<path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4zM20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z"/>',
   wa: '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z"/>',
   heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
+  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
+  bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/>',
   sunrise: '<path d="M12 3v5M5 11l1.5 1.5M19 11l-1.5 1.5M3 18h18M7 18a5 5 0 0 1 10 0M9 6l3-3 3 3"/>'
 };
 const ic = (n, s = 20, w = 1.8) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || ''}</svg>`;
 const logo = (s = 34) => `<svg width="${s}" height="${s}" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="30" fill="var(--card)" stroke="var(--line2)"/><path d="M60 26Q76 52 60 86Q44 52 60 26Z" fill="#FF7A1A"/><path d="M60 86Q30 80 22 52Q48 54 60 86Z" fill="none" stroke="var(--text)" stroke-width="5" stroke-linejoin="round"/><path d="M60 86Q90 80 98 52Q72 54 60 86Z" fill="none" stroke="var(--text)" stroke-width="5" stroke-linejoin="round"/><circle cx="60" cy="58" r="6" fill="var(--card)"/></svg>`;
 
 // ---------- state ----------
-const DEFAULT_SECTIONS = ['mumbai', 'india', 'world', 'markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'spiritual'];
+const DEFAULT_SECTIONS = ['mumbai', 'india', 'world', 'markets', 'money', 'gold', 'knowledge', 'health', 'sports', 'gadgets', 'phones', 'bollywood', 'movies', 'viral', 'spiritual'];
 const S = {
   news: null, markets: null, byId: {}, weather: null, loc: null,
-  settings: Object.assign({ name: 'Mehul', theme: 'dark', sections: DEFAULT_SECTIONS, key: '', model: 'gemini-2.5-flash' }, LS.get('settings', {})),
+  settings: Object.assign({ name: 'Mehul', theme: 'light', v: 2, sections: DEFAULT_SECTIONS, key: '', model: 'gemini-2.5-flash' }, LS.get('settings', {})),
   read: new Set(LS.get('read', [])), saved: LS.get('saved', []), guide: LS.get('guide', []),
   chat: [], range: '1D', moneyTab: 'markets', lastRoute: '#home', installEvt: null
 };
 const saveSettings = () => LS.set('settings', S.settings);
-const markRead = (id) => { if (!S.read.has(id)) { S.read.add(id); LS.set('read', [...S.read].slice(-1500)); } };
+if ((S.settings.v || 1) < 2) { for (const id of ['knowledge', 'sports']) if (!S.settings.sections.includes(id)) S.settings.sections.push(id); S.settings.sections = DEFAULT_SECTIONS.filter((x) => S.settings.sections.includes(x)); S.settings.v = 2; LS.set('settings', S.settings); }
+S.history = LS.get('history', []);
+const markRead = (id) => {
+  if (S.read.has(id)) return;
+  S.read.add(id); LS.set('read', [...S.read].slice(-1500));
+  const s = S.byId[id];
+  if (s) { S.history = [{ id, title: s.headline || s.title, section: s.section, source: s.sources[0]?.name || '', link: s.link, image: s.image, at: Date.now() }, ...S.history.filter((h) => h.id !== id)].slice(0, 300); LS.set('history', S.history); }
+};
+const unread = (list) => list.filter((s) => !S.read.has(s.id));
 document.documentElement.dataset.theme = S.settings.theme;
 
-const secMeta = (id) => (S.news?.sections || []).find((s) => s.id === id) || { id, name: id, short: id, color: '#1B1E25', tint: '#C9CCD3', icon: 'globe' };
+const HUES = { mumbai: 172, india: 30, world: 214, markets: 256, money: 282, gold: 44, knowledge: 226, health: 145, sports: 98, gadgets: 192, phones: 202, bollywood: 330, movies: 300, viral: 356, spiritual: 18 };
+const ICONS = { sports: 'trophy', knowledge: 'bulb' };
+function secColors(id) {
+  const h = HUES[id] ?? 220; const light = document.documentElement.dataset.theme === 'light';
+  return light ? { color: `hsl(${h} 78% 93%)`, tint: `hsl(${h} 62% 30%)`, solid: `hsl(${h} 62% 44%)` } : { color: `hsl(${h} 34% 17%)`, tint: `hsl(${h} 72% 76%)`, solid: `hsl(${h} 60% 55%)` };
+}
+const secMeta = (id) => { const base = (S.news?.sections || []).find((s) => s.id === id) || { id, name: id, short: id, icon: ICONS[id] || 'globe' }; return { ...base, icon: ICONS[id] || base.icon, ...secColors(id) }; };
 const inSection = (s, id) => s.section === id || (s.also || []).includes(id);
 const secStories = (id) => (S.news?.stories || []).filter((s) => inSection(s, id)).sort((a, b) => b.score - a.score);
 
@@ -186,38 +203,49 @@ function viewHome() {
   }
   const tick = [['nifty', 'Nifty 50'], ['sensex', 'Sensex'], ['gold', 'Gold 24K · 10g'], ['silver', 'Silver · 1kg'], ['usdinr', 'USD / INR'], ['brent', 'Brent crude']].filter(([k]) => q[k]).map(([k, l]) => { const x = q[k]; const rupee = k === 'gold' || k === 'silver'; return `<a class="tile" href="#money"><span class="xs muted">${l}</span><span class="v">${rupee ? '₹' + Math.round(x.price).toLocaleString('en-IN') : k === 'brent' ? '$' + num(x.price) : num(x.price, k === 'usdinr' ? 2 : 0)}</span><div class="row sp"><span class="xs ${x.pct >= 0 ? 'up' : 'down'}">${pct(x.pct)}</span>${x.spark?.length > 3 ? `<span style="width:52px;height:18px;display:block">${spark(x.spark, 52, 18, x.pct >= 0 ? 'var(--up)' : 'var(--down)', false)}</span>` : ''}</div></a>`; }).join('');
   if (!n) return `${header()}<div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div>${weather}<div class="empty mt24">Fetching today’s news…</div>`;
-  const must = n.mustKnow.map((id) => S.byId[id]).filter(Boolean);
-  const unread = n.quick60.filter((id) => !S.read.has(id)).length;
-  const allRead = must.every((s) => S.read.has(s.id));
-  const hero = n.stories.filter((s) => s.image && !n.mustKnow.slice(0, 1).includes(s.id)).sort((a, b) => b.score - a.score)[0];
+  const shown = new Set(); const take = (list, k) => { const out = []; for (const s of list) { if (out.length >= k) break; if (shown.has(s.id) || S.read.has(s.id)) continue; shown.add(s.id); out.push(s); } return out; };
+  const fresh = n.stories.filter((s) => Date.now() - s.time < 4 * 3.6e6 && (s.n >= 2 || s.score > 1.5)).sort((a, b) => b.time - a.time);
+  const latest = take(fresh, 4);
+  const mustAll = n.mustKnow.map((id) => S.byId[id]).filter(Boolean);
+  const must = take(mustAll, 10); const mustRead = mustAll.filter((s) => S.read.has(s.id)).length;
+  const hero = take(n.stories.filter((s) => s.image && s.summary).sort((a, b) => b.score - a.score), 1)[0];
+  const q60 = n.quick60.filter((id) => !S.read.has(id)).length;
   const fcs = (n.factChecks || []).slice(0, 2);
   const th = THOUGHTS[dayIndex() % THOUGHTS.length]; const tp = TIPS[dayIndex() % TIPS.length];
-  const forYou = S.settings.sections.map((id) => { const list = secStories(id).filter((s) => !n.mustKnow.includes(s.id)).slice(0, 3); if (!list.length) return ''; const m = secMeta(id); return `<div class="sec-head"><span class="h2 row gap8"><span style="width:10px;height:10px;border-radius:5px;background:${m.tint}"></span>${esc(m.name)}</span><a href="#section/${id}">See all</a></div><div>${list[0].summary && list[0].image ? storyCard(list[0]) + list.slice(1).map(storyRow).join('') : list.map(storyRow).join('')}</div>`; }).join('');
+  const forYou = S.settings.sections.map((id) => {
+    const list = take(secStories(id), 3); if (!list.length) return ''; const m = secMeta(id);
+    return `<div class="sec-head"><a class="h2 row gap8" href="#section/${id}"><span class="sdot" style="background:${m.color};color:${m.tint}">${ic(m.icon, 16, 2)}</span>${esc(m.name)}</a><a href="#section/${id}">See all</a></div><div>${list[0].summary && list[0].image ? storyCard(list[0]) + list.slice(1).map(storyRow).join('') : list.map(storyRow).join('')}</div>`;
+  }).join('');
+  const upd = new Date(n.updated).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
   return `${header()}
   <div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div>
   ${weather}
   ${tick ? `<div class="ticker hscroll">${tick}</div>` : ''}
-  <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${unread ? 'Quick 60 is ready' : 'Quick 60: all read'}</b><span class="small" style="opacity:.8">${unread ? `${unread} stories in 60 words · about ${Math.max(2, Math.round(unread * 0.25))} min` : 'Swipe again any time'}</span></span>${ic('chev', 22, 2)}</a>
-  <div class="sec-head"><span class="h2">Must know today</span><span class="xs muted">${must.filter((s) => S.read.has(s.id)).length}/${must.length} read</span></div>
-  ${allRead ? `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up on today’s top stories</div>` : ''}
-  <div class="card" style="padding:4px 14px">${must.map((s, i) => `<a class="mk ${S.read.has(s.id) ? 'read' : ''}" href="#story/${s.id}"><span class="num">${S.read.has(s.id) ? ic('check', 16, 2.6) : i + 1}</span><div class="col gap4 grow"><span class="ttl">${esc(s.headline || s.title)}</span><span class="meta"><span style="color:${secMeta(s.section).tint}">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)} · ${s.n > 1 ? `<span style="color:var(--ok)">${s.n} sources</span>` : esc(s.sources[0]?.name)}${s.breaking ? ' · <span class="badge b-live">Breaking</span>' : ''}</span></div></a>`).join('')}</div>
-  ${hero ? `<div class="sec-head"><span class="h2">Top story</span></div><a class="hero" href="#story/${hero.id}">${img(hero, 220, true)}<div class="ov"><div class="row gap8"><span class="tag" style="color:${secMeta(hero.section).tint}">${esc(secMeta(hero.section).short)} · ${esc(hero.sources[0].name)}</span><span style="margin-left:auto">${verify(hero)}</span></div><span class="ttl">${esc(hero.headline || hero.title)}</span></div></a>` : ''}
+  ${latest.length ? `<div class="live mt16"><div class="row sp"><span class="row gap8" style="font-weight:700"><span class="pulse"></span>Latest updates</span><button class="xs muted row gap4" data-act="refresh" aria-label="Refresh news">Updated ${upd} ${ic('refresh', 14)}</button></div>${latest.map((s) => `<a class="lrow" href="#read/${s.id}"><span class="ltime">${new Date(s.time).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span><span class="col grow" style="gap:2px"><span class="lttl">${s.breaking && s.n >= 3 ? '<span class="badge b-live" style="margin-right:6px">Breaking</span>' : ''}${esc(s.headline || s.title)}</span><span class="xs muted">${esc(secMeta(s.section).short)} · ${esc(s.sources[0]?.name || '')}${s.n > 1 ? ` · <span style="color:var(--ok)">${s.n} sources</span>` : ''}</span></span></a>`).join('')}</div>` : ''}
+  <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${q60 ? 'Quick 60 is ready' : 'Quick 60: all read'}</b><span class="small" style="opacity:.85">${q60 ? `${q60} unread stories in 60 words · about ${Math.max(2, Math.round(q60 * 0.25))} min` : 'Pick any section tab for more'}</span></span>${ic('chev', 22, 2)}</a>
+  <div class="sec-head"><span class="h2">Must know today</span>${mustRead ? `<a href="#history">${mustRead} read ${ic('chev', 12, 2)}</a>` : ''}</div>
+  ${must.length ? `<div class="card" style="padding:4px 14px">${must.map((s, i) => `<a class="mk" href="#read/${s.id}"><span class="num">${i + 1}</span><div class="col gap4 grow"><span class="ttl">${esc(s.headline || s.title)}</span><span class="meta"><span style="color:${secMeta(s.section).solid}">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)} · ${s.n > 1 ? `<span style="color:var(--ok)">${s.n} sources</span>` : esc(s.sources[0]?.name)}</span></div></a>`).join('')}</div>` : `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up on today’s top stories</div>`}
+  ${hero ? `<div class="sec-head"><span class="h2">Top story</span></div>${storyCard(hero)}` : ''}
   ${fcs.length ? `<div class="sec-head"><span class="h2">Fake news busted</span><a href="#factchecks">See all</a></div>${fcs.map((f) => `<a class="fc mt8" href="#web/${encodeURIComponent(f.link)}">${ic('alert', 18, 2)}<span class="col"><span>${esc(f.title)}</span><span class="xs" style="opacity:.8">${esc(f.publisher)} · ${ago(f.time)}</span></span></a>`).join('')}` : ''}
   ${forYou}
   <div class="sec-head"><span class="h2">For your day</span></div>
-  <div class="quote"><span class="eyebrow" style="color:#FFC48A">${ic('lotus', 14)} Thought of the day</span><p>${esc(th[0])}</p><span class="small muted">— ${esc(th[1])}</span></div>
+  <div class="quote"><span class="eyebrow" style="color:${secMeta('spiritual').solid}">${ic('lotus', 14)} Thought of the day</span><p>${esc(th[0])}</p><span class="small muted">— ${esc(th[1])}</span></div>
   <div class="quote mt12"><span class="eyebrow" style="color:var(--ok)">${ic('heart', 14)} Self-care tip</span><p style="font-size:17px">${esc(tp[0])}</p><span class="small muted">${esc(tp[1])}</span></div>
-  <div class="updated">Updated ${ago(n.updated)} ago · ${n.stats?.ok || 0} trusted feeds checked<br><button data-act="refresh" class="row gap4" style="margin:8px auto 0;color:var(--accent-text)">${ic('refresh', 14)} Refresh now</button></div>`;
+  <div class="updated">News updated at ${upd} · refreshes every 30 minutes<br>${n.stats?.ok || 0} trusted feeds checked · <a href="#history" style="color:var(--accent-text)">Read history</a></div>`;
 }
-const header = () => `<div class="top"><div class="brand">${logo()}<b>Drishti</b></div><div class="row gap8"><a class="ibtn" href="#search" aria-label="Search">${ic('search')}</a><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div></div>`;
+const header = () => `<div class="top"><div class="brand">${logo()}<b>Drishti</b></div><div class="row gap8"><button class="ibtn" data-act="refresh" aria-label="Refresh news" id="rfb">${ic('refresh')}</button><a class="ibtn" href="#search" aria-label="Search">${ic('search')}</a><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div></div>`;
 
-const FEED_TABS = [['all', 'My feed'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['markets', 'Markets'], ['money', 'SIP and MF'], ['gold', 'Gold'], ['bollywood', 'Bollywood'], ['movies', 'Movies'], ['phones', 'Phones'], ['gadgets', 'Gadgets'], ['health', 'Health'], ['viral', 'Viral'], ['spiritual', 'Spiritual']];
+const FEED_TABS = [['all', 'My feed'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['knowledge', 'Knowledge'], ['markets', 'Markets'], ['money', 'SIP and MF'], ['gold', 'Gold'], ['health', 'Health'], ['sports', 'Sports'], ['gadgets', 'Tech'], ['phones', 'Phones'], ['bollywood', 'Bollywood'], ['movies', 'Movies'], ['viral', 'Viral'], ['spiritual', 'Spiritual']];
 const hasBody = (s) => (s.summary || '').length > 90;
 function viewQuick(tab = 'all') {
   const n = S.news; if (!n) return `<div class="empty">Loading…</div>`;
+  // read stories leave the feed (they live in Read history); the list is fixed when the feed opens
   let list = tab === 'all' ? n.quick60.map((id) => S.byId[id]).filter(Boolean) : secStories(tab);
-  const full = list.filter(hasBody); if (full.length >= 5) list = full.concat(list.filter((s) => !hasBody(s)).slice(0, 0));
-  const startAt = tab === 'all' ? Math.max(0, list.findIndex((s) => !S.read.has(s.id))) : 0;
+  if (tab === 'all') { const more = n.stories.filter((s) => hasBody(s) && !n.quick60.includes(s.id)).sort((a, b) => b.score - a.score); list = list.concat(more); }
+  list = unread(list);
+  const full = list.filter(hasBody); if (full.length >= 3) list = full;
+  list = list.slice(0, 80);
+  const startAt = 0;
   const cards = list.map((s, i) => {
     const m = secMeta(s.section); const src = s.sources[0]?.name || '';
     return `<section class="qcard" data-id="${s.id}" data-i="${i}"><div class="qimg">${img(s, 200, true)}
@@ -232,9 +260,9 @@ function viewQuick(tab = 'all') {
       <a class="qmore" href="#read/${s.id}"><span class="col"><b>Read full story</b><span class="xs">at ${esc(src)}${s.n > 1 ? ` · also ${esc(s.sources.slice(1, 3).map((x) => x.name).join(', '))}` : ''}</span></span>${ic('chev', 20, 2)}</a>
     </section>`;
   }).join('');
-  const done = `<section class="qcard" style="align-items:center;justify-content:center;text-align:center;padding:24px"><span style="color:var(--ok)">${ic('check', 56, 2)}</span><h2 class="h1 mt16">All caught up</h2><p class="muted">You’ve seen ${list.length} stories${tab === 'all' ? '' : ' in ' + esc(secMeta(tab).short)}.</p><a class="btn btn-acc mt16" href="#home">Back to home</a></section>`;
+  const done = `<section class="qcard" style="align-items:center;justify-content:center;text-align:center;padding:24px"><span style="color:var(--ok)">${ic('check', 56, 2)}</span><h2 class="h1 mt16">All caught up</h2><p class="muted">You’ve seen everything new${tab === 'all' ? '' : ' in ' + esc(secMeta(tab).short)}. Fresh stories arrive every 30 minutes.</p><a class="btn btn-acc mt16" href="#home">Back to home</a><a class="btn btn-line mt8" href="#history">${ic('history', 18)} Read history</a></section>`;
   setTimeout(() => setupQuick(startAt, list.length, tab), 0);
-  return `<div class="qbar"><div class="row gap8"><a class="ibtn" href="#home" aria-label="Back to home" style="width:40px;height:40px;flex-shrink:0">${ic('back', 20, 2)}</a><div class="qtabs" id="qt">${FEED_TABS.map(([id, l]) => `<a href="#quick/${id}" class="${tab === id ? 'on' : ''}">${l}</a>`).join('')}</div><span class="xs muted" id="qc" style="flex-shrink:0;min-width:38px;text-align:right">1/${list.length}</span></div><div class="qprog"><i id="qp" style="width:0"></i></div></div><div class="qwrap" id="qw">${list.length ? cards + done : '<div class="empty mt24">No stories here right now.</div>'}</div>`;
+  return `<div class="qbar"><div class="row gap8"><a class="ibtn" href="#home" aria-label="Back to home" style="width:40px;height:40px;flex-shrink:0">${ic('back', 20, 2)}</a><div class="qtabs" id="qt">${FEED_TABS.map(([id, l]) => `<a href="#quick/${id}" class="${tab === id ? 'on' : ''}">${l}</a>`).join('')}</div><span class="xs muted" id="qc" style="flex-shrink:0;min-width:38px;text-align:right">1/${list.length}</span></div><div class="qprog"><i id="qp" style="width:0"></i></div></div><div class="qwrap" id="qw">${list.length ? cards + done : done}</div>`;
 }
 function setupQuick(start, total, tab) {
   const w = $('#qw'); if (!w) return;
@@ -270,30 +298,37 @@ function viewStory(id) {
 }
 
 function viewSection(id) {
-  const m = secMeta(id); const list = secStories(id);
+  const m = secMeta(id); const allList = secStories(id); const list = unread(allList); const readN = allList.length - list.length;
   let top = '';
   if (id === 'spiritual') { const th = THOUGHTS[dayIndex() % THOUGHTS.length]; top = `<div class="quote mt12"><span class="eyebrow" style="color:#FFC48A">Thought of the day</span><p>${esc(th[0])}</p><span class="small muted">— ${esc(th[1])}</span></div>`; }
   if (id === 'health') { const tp = TIPS[dayIndex() % TIPS.length]; const tp2 = TIPS[(dayIndex() + 7) % TIPS.length]; top = `<div class="quote mt12"><span class="eyebrow" style="color:var(--ok)">Today’s self-care</span><p style="font-size:17px">${esc(tp[0])}</p><span class="small muted">${esc(tp[1])}</span><p style="font-size:17px;margin-top:14px">${esc(tp2[0])}</p><span class="small muted">${esc(tp2[1])}</span></div>`; }
   if (id === 'gold' || id === 'markets') top = `<a class="card row mt12" href="#money">${ic('chart', 20)}<span class="grow">Live rates and charts in Money</span>${ic('chev', 18)}</a>`;
   if (id === 'viral' && S.news?.videos?.length) top = `<a class="card row mt12" href="#videos">${ic('play', 20)}<span class="grow">Trending YouTube videos in India</span>${ic('chev', 18)}</a>`;
-  return `${backBar('Explore')}<div class="row gap12 mt8"><span style="width:48px;height:48px;border-radius:14px;background:${m.color};color:${m.tint};display:flex;align-items:center;justify-content:center">${ic(m.icon, 24)}</span><div class="col"><h1 class="h1" style="font-size:26px">${esc(m.name)}</h1><span class="small muted">${list.length} stories · updated ${S.news ? ago(S.news.updated) : ''} ago</span></div></div>${top}<a class="q60" href="#quick/${id}" style="margin-top:14px">${ic('bolt', 22, 2)}<span class="col grow"><b style="font-size:16px">Swipe through ${esc(m.short)}</b><span class="small" style="opacity:.8">One story per screen, 60 words each</span></span>${ic('chev', 20, 2)}</a><div class="col gap16 mt16">${list.length ? list.slice(0, 40).map((x) => (x.summary ? storyCard(x) : storyRow(x))).join('') : '<div class="empty">No fresh stories right now.</div>'}</div>`;
+  return `${backBar('Explore')}<div class="row gap12 mt8"><span style="width:48px;height:48px;border-radius:14px;background:${m.color};color:${m.tint};display:flex;align-items:center;justify-content:center">${ic(m.icon, 24)}</span><div class="col"><h1 class="h1" style="font-size:26px">${esc(m.name)}</h1><span class="small muted">${list.length} new stories · updated ${S.news ? ago(S.news.updated) : ''} ago</span></div></div>${top}<a class="q60" href="#quick/${id}" style="margin-top:14px">${ic('bolt', 22, 2)}<span class="col grow"><b style="font-size:16px">Swipe through ${esc(m.short)}</b><span class="small" style="opacity:.8">One story per screen, 60 words each</span></span>${ic('chev', 20, 2)}</a><div class="col gap16 mt16">${list.length ? list.slice(0, 40).map((x) => (x.summary ? storyCard(x) : storyRow(x))).join('') : '<div class="caught">' + ic('check', 20, 2.4) + 'All caught up in ' + esc(m.short) + '</div>'}</div>${readN ? `<a class="card row mt16" href="#history">${ic('history', 20)}<span class="grow">${readN} stories you’ve read are in Read history</span>${ic('chev', 18)}</a>` : ''}`;
 }
 
 function viewExplore() {
-  const n = S.news; const order = DEFAULT_SECTIONS;
-  const tiles = order.map((id) => { const m = secMeta(id); const c = secStories(id).length; return `<a class="stile" href="#section/${id}" style="background:${m.color}"><span class="ic" style="color:${m.tint}">${ic(m.icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(m.name)}</b><span class="xs" style="color:${m.tint}">${c} stories</span></span></a>`; }).join('');
+  const n = S.news;
+  const tile = (href, hue, icon, title, sub) => { const light = document.documentElement.dataset.theme === 'light'; const bg = light ? `hsl(${hue} 78% 93%)` : `hsl(${hue} 34% 17%)`; const ink = light ? `hsl(${hue} 62% 30%)` : `hsl(${hue} 72% 76%)`; return `<a class="stile" href="${href}" style="background:${bg}"><span class="ic" style="color:${ink}">${ic(icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(title)}</b><span class="xs" style="color:${ink}">${esc(sub)}</span></span></a>`; };
+  const tiles = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="stile" href="#section/${id}" style="background:${m.color}"><span class="ic" style="color:${m.tint}">${ic(m.icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(m.name)}</b><span class="xs" style="color:${m.tint}">${c} new</span></span></a>`; }).join('');
   return `<div class="top"><h1 class="h1">Explore</h1><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div>
   <a class="search mt8" href="#search">${ic('search', 18)}<span class="muted">Search all news</span></a>
   <div class="trust mt12"><span style="width:38px;height:38px;border-radius:12px;background:var(--bg);color:var(--ok);display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic('shield', 20, 2)}</span><span class="col"><span style="font-weight:600;font-size:14px;color:var(--ok)">Only trusted sources</span><span class="xs muted">${n?.stats?.ok || 0} feeds from established publishers, cross-checked every 30 minutes, with fact-check flags on viral claims.</span></span></div>
   <div class="grid2 mt16">
-    <a class="stile" href="#saved" style="background:#2A2410"><span class="ic" style="color:#FFD66B">${ic('bookmark', 20)}</span><span class="col" style="gap:2px"><b>Saved</b><span class="xs" style="color:#FFD66B">${S.saved.length} stories</span></span></a>
-    <a class="stile" href="#factchecks" style="background:#401A1A"><span class="ic" style="color:#FF9B9B">${ic('alert', 20)}</span><span class="col" style="gap:2px"><b>Fake news busted</b><span class="xs" style="color:#FF9B9B">${n?.factChecks?.length || 0} checks</span></span></a>
+    ${tile('#history', 200, 'history', 'Read history', S.history.length + ' read')}
+    ${tile('#saved', 44, 'bookmark', 'Saved', S.saved.length + ' stories')}
     ${tiles}
-    ${n?.videos?.length ? `<a class="stile" href="#videos" style="background:#3A1414"><span class="ic" style="color:#FF9B9B">${ic('play', 20)}</span><span class="col" style="gap:2px"><b>Trending videos</b><span class="xs" style="color:#FF9B9B">YouTube India</span></span></a>` : ''}
-    <a class="stile" href="#grow" style="background:#221A3F"><span class="ic" style="color:#C7BAFF">${ic('target', 20)}</span><span class="col" style="gap:2px"><b>Grow your money</b><span class="xs" style="color:#C7BAFF">Guides and calculators</span></span></a>
+    ${tile('#factchecks', 0, 'alert', 'Fake news busted', (n?.factChecks?.length || 0) + ' checks')}
+    ${n?.videos?.length ? tile('#videos', 356, 'play', 'Trending videos', 'YouTube India') : ''}
+    ${tile('#grow', 270, 'target', 'Grow your money', 'Guides and calculators')}
   </div>`;
 }
-
+function viewHistory() {
+  const h = S.history;
+  const groups = {}; for (const x of h) { const d = new Date(x.at).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' }); (groups[d] ||= []).push(x); }
+  return `${backBar()}<div class="row sp mt8"><h1 class="h1">Read history</h1>${h.length ? '<button class="xs muted" data-act="clearhist">Clear</button>' : ''}</div><p class="small muted">Stories you’ve opened or swiped past. They no longer appear in your feeds.</p>
+  ${h.length ? Object.entries(groups).map(([d, list]) => `<div class="sec-head" style="margin-top:18px"><span class="eyebrow">${esc(d)}</span></div>${list.map((x) => { const m = secMeta(x.section); const live = !!S.byId[x.id]; return `<a class="story" href="${live ? '#read/' + x.id : '#web/' + encodeURIComponent(x.link)}"><div class="thumb" style="width:64px;height:64px">${x.image ? `<img src="${esc(x.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : art(x.section, 64)}</div><div class="col gap4 grow"><span class="tag" style="color:${m.solid}">${esc(m.short)} · ${esc(x.source)}</span><span class="ttl clamp2" style="font-size:15px">${esc(x.title)}</span><span class="xs muted">Read at ${new Date(x.at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span></div></a>`; }).join('')}`).join('') : '<div class="empty">Nothing read yet. Stories you open will appear here.</div>'}`;
+}
 function viewSearch(q = '') {
   q = decodeURIComponent(q);
   const res = q.length > 1 ? (S.news?.stories || []).filter((s) => (s.title + ' ' + (s.headline || '') + ' ' + (s.summary || '') + ' ' + s.sources.map((x) => x.name).join(' ')).toLowerCase().includes(q.toLowerCase())).sort((a, b) => b.score - a.score) : [];
@@ -619,7 +654,7 @@ function weatherSheet() {
 function route() { return (location.hash || '#home').slice(1).split('/'); }
 function render() {
   const [r, a] = route(); const v = $('#view');
-  const map = { home: viewHome, quick: viewQuick, money: viewMoney, grow: viewGrow, ask: viewAsk, explore: viewExplore, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide };
+  const map = { history: viewHistory, home: viewHome, quick: viewQuick, money: viewMoney, grow: viewGrow, ask: viewAsk, explore: viewExplore, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide };
   let html;
   if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read') html = viewRead(a, route()[2] != null ? Number(route()[2]) : null); else if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
   const tab = r === 'read' || r === 'web' ? S.lastTab : { home: 'home', quick: 'quick', money: 'money', grow: 'money', calc: 'money', guide: 'money', learn: 'money', ask: 'ask' }[r] || (r === 'story' ? S.lastTab : 'explore');
@@ -641,7 +676,8 @@ document.addEventListener('click', async (e) => {
   if (act === 'back') { if (history.length > 1) history.back(); else location.hash = '#home'; }
   else if (act === 'weather') weatherSheet();
   else if (act === 'relocate') { b.closest('.sheet-bg')?.remove(); toast('Finding your location…'); await loadWeather(true); render(); }
-  else if (act === 'refresh') { toast('Refreshing…'); await Promise.all([loadData(true), loadWeather(true)]); render(); toast('Up to date'); }
+  else if (act === 'refresh') { const before = S.news?.updated; b.classList.add('spin'); await Promise.all([loadData(true), loadWeather(true)]); render(); toast(S.news?.updated !== before ? 'Latest news loaded' : 'You’re up to date'); }
+  else if (act === 'clearhist') { S.history = []; LS.set('history', []); render(); }
   else if (act === 'save') { const i = S.saved.indexOf(id); if (i >= 0) { S.saved.splice(i, 1); toast('Removed from saved'); } else { S.saved.unshift(id); toast('Saved'); } LS.set('saved', S.saved.slice(0, 200)); }
   else if (act === 'share') { const s = S.byId[id]; if (!s) return; const text = `${s.headline || s.title}\n\n${s.summary || ''}\n\n${s.link}`; if (navigator.share) navigator.share({ title: s.headline || s.title, text: `${s.headline || s.title}\n\n${s.summary || ''}`, url: s.link }).catch(() => {}); else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); }
   else if (act === 'range') { S.range = b.dataset.r; render(); }
@@ -682,4 +718,10 @@ document.addEventListener('visibilitychange', async () => {
   render();
   loadWeather().then(() => { const [r] = route(); if (r === 'home' || r === '') render(); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // check for fresh news every 5 minutes; the server refreshes every 30
+  setInterval(async () => {
+    if (document.visibilityState !== 'visible') return;
+    const before = S.news?.updated; await loadData(true);
+    if (S.news?.updated !== before) { const [r] = route(); if (['home', 'section', 'explore', 'money', ''].includes(r)) { const y = window.scrollY; render(); window.scrollTo(0, y); } toast('Fresh news just arrived'); }
+  }, 5 * 6e4);
 })();
