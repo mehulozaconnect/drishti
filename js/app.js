@@ -353,6 +353,8 @@ function viewVideos() {
 
 // ---------- in-app reader ----------
 const READER_BAD = /(subscription|subscribe|newsletter|see all|sign in|log in|loading\.\.\.|premium stor|unlock|cookie|download (the|our) app|already a (member|subscriber)|e-?paper|terms of use|privacy policy|all rights reserved|follow us on|join our|whatsapp channel|recommended for you|you may also like|trending now|copyright)/i;
+const HEAD_JUNK = /^(latest|trending|related|recommended|more (from|stories|news|in)|also (read|see)|top (stories|news|videos|photos)|web stories|photos|videos|popular|most (read|viewed|popular)|you may|read next|what to read|editor'?s picks|tags|topics|follow|share|comments?)\b/i;
+const tidyHeads = (parts) => parts.filter((p, i) => !(p.startsWith('<h3') && (i === parts.length - 1 || parts[i + 1].startsWith('<h3'))));
 const camelJunk = (t) => (t.match(/[a-z][A-Z][a-z]/g) || []).length >= 2;
 const READER_JUNK = /^(advertisement|also read|read more|read also|recommended|trending|follow us|subscribe|sign in|log ?in|share|copy link|whatsapp|facebook|twitter|telegram|google news|story continues|click here|download|for more|stay updated|first published|updated:|last updated|published:|edited by|written by|by\s|photo:|image:|file photo|representational|catch all|get the latest|you may also like|related|tags?:|topics?:|disclaimer|©)(\b|\s|$)/i;
 function readerHtml(md, title) {
@@ -365,7 +367,7 @@ function readerHtml(md, title) {
     ln = ln.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]+>/g, '').replace(/\*\*|__/g, '').trim();
     if (!ln || seen.has(ln)) continue; seen.add(ln);
     const h = /^#{1,4}\s+(.*)/.exec(ln);
-    if (h) { const t = h[1].trim(); if (t.length > 8 && t.length < 140 && words > 0 && t !== title && !READER_JUNK.test(t)) out.push(`<h3 class="rh">${esc(t)}</h3>`); continue; }
+    if (h) { const t = h[1].trim(); if (t.length > 8 && t.length < 140 && words > 0 && t !== title && !READER_JUNK.test(t) && !HEAD_JUNK.test(t)) out.push(`<h3 class="rh">${esc(t)}</h3>`); continue; }
     const li = /^[-*•]\s+(.*)/.exec(ln);
     const text = (li ? li[1] : ln).replace(/^>\s*/, '').trim();
     if (READER_JUNK.test(text) || READER_BAD.test(text) || camelJunk(text) || text === title) continue;
@@ -375,7 +377,7 @@ function readerHtml(md, title) {
     words += text.split(/\s+/).length;
     if (words > 2500) break;
   }
-  return words > 60 ? out.join('') : '';
+  return words > 60 ? tidyHeads(out).join('') : '';
 }
 let ReadabilityMod = null;
 async function readable(url) {
@@ -401,12 +403,12 @@ async function readable(url) {
     const t = el.textContent.replace(/\s+/g, ' ').trim();
     if (!t || seen.has(t) || READER_BAD.test(t) || READER_JUNK.test(t) || camelJunk(t)) return;
     seen.add(t);
-    if (/^H[234]$/.test(el.tagName)) { if (t.length > 6 && t.length < 140 && words) out.push(`<h3 class="rh">${esc(t)}</h3>`); return; }
+    if (/^H[234]$/.test(el.tagName)) { if (t.length > 6 && t.length < 140 && words && !HEAD_JUNK.test(t)) out.push(`<h3 class="rh">${esc(t)}</h3>`); return; }
     if (t.length < 40 && !/[.!?”"]$/.test(t)) return;
     out.push(el.tagName === 'LI' ? `<p class="rp">• ${esc(t)}</p>` : el.tagName === 'BLOCKQUOTE' ? `<p class="rp" style="border-left:3px solid var(--accent);padding-left:12px;border-radius:0">${esc(t)}</p>` : `<p class="rp">${esc(t)}</p>`);
     words += t.split(' ').length;
   });
-  return words > 80 ? out.join('') : '';
+  return words > 80 ? tidyHeads(out).join('') : '';
 }
 async function loadArticle(url) {
   const key = 'art:' + url;
