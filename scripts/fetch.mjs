@@ -87,7 +87,7 @@ function similar(a, b) {
   const ov = inter / Math.min(wa, wb);
   return Math.max(j, ov * 0.7);
 }
-const JUNK = /\bnull\b|aum\(rs cr\)|^quarterly results of companies$|^tariffs and global trade$|diary: saturday dossier|^[^:]{0,40}(news|updates)$|\b\d+\+? (happy )?[\w' ]{0,30}(messages|wishes|greetings|quotes)\b|(wishes|messages|greetings|quotes|status)\b.{0,30}\b(wishes|messages|greetings|quotes|status)\b|e-?paper|news brief|morning brief|evening brief|news wrap|top headlines|headlines today|news highlights|live updates:|^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
+const JUNK = /^watch:|^video:|\bin pictures\b|^in photos|\| watch$|: watch$|\bnull\b|aum\(rs cr\)|^quarterly results of companies$|^tariffs and global trade$|diary: saturday dossier|^[^:]{0,40}(news|updates)$|\b\d+\+? (happy )?[\w' ]{0,30}(messages|wishes|greetings|quotes)\b|(wishes|messages|greetings|quotes|status)\b.{0,30}\b(wishes|messages|greetings|quotes|status)\b|e-?paper|news brief|morning brief|evening brief|news wrap|top headlines|headlines today|news highlights|live updates:|^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
 const words = (s, n) => { const w = s.split(/\s+/); return w.length <= n ? s : w.slice(0, n).join(' ').replace(/[,;:]$/, '') + '…'; };
 const hash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 12);
 
@@ -540,12 +540,15 @@ async function main() {
   for (let r = 0; r < 8; r++) for (const [k, list] of bySec.entries()) { const take = SECTIONS[k].id === 'mumbai' ? 2 : 1; for (const s of list.slice(r * take, r * take + take)) q.add(s.id); }
   const quick60 = [...q].slice(0, 90);
 
-  const topPerSec = new Set(SECTIONS.flatMap((sec) => all.filter((x) => x.section === sec.id).slice(0, 12).map((x) => x.id)));
-  const toSummarise = all.filter((s) => q.has(s.id) || topPerSec.has(s.id) || s.n >= 3).slice(0, 220);
+  const topPerSec = new Set(SECTIONS.flatMap((sec) => all.filter((x) => x.section === sec.id).slice(0, 30).map((x) => x.id)));
+  const toSummarise = all.filter((s) => q.has(s.id) || topPerSec.has(s.id) || s.n >= 3).slice(0, 420);
   await enrich(toSummarise, cache);
   { const bad = new Set(toSummarise.filter((x) => cache[x.id]?.bad || COMMENTS.test(x.link)).map((x) => x.id)); if (bad.size) { all = all.filter((x) => !bad.has(x.id)); log('dropped comment-page stories', bad.size); } }
   await summarise(toSummarise, cache);
-  for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; delete s.desc; delete s.alt; delete s.body; delete s.links; delete s.glinks; }
+  for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; s.summary = stripTitle(s.summary, s.title); delete s.desc; delete s.alt; delete s.body; delete s.links; delete s.glinks; }
+  { const before = all.length; all = all.filter((s) => (s.summary || '').split(/\s+/).length >= 40); log(`kept ${all.length} of ${before} stories with a full summary`); }
+  for (const sec of sections) sec.count = all.filter((x) => x.section === sec.id).length;
+  { const ids = new Set(all.map((x) => x.id)); for (let i = mustKnow.length - 1; i >= 0; i--) if (!ids.has(mustKnow[i])) mustKnow.splice(i, 1); for (let i = quick60.length - 1; i >= 0; i--) if (!ids.has(quick60[i])) quick60.splice(i, 1); }
 
   const [mk, vids] = await Promise.all([markets(prevMarkets), videos()]);
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light" data-mode="light" data-accent="saffron">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -12,12 +12,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=12">
-<script>try{var s=JSON.parse(localStorage.getItem('drishti.settings')||'{}');if(s.theme)document.documentElement.dataset.theme=s.theme}catch(e){}</script>
+<link rel="stylesheet" href="css/app.css?v=13">
+<script>try{var s=JSON.parse(localStorage.getItem('drishti.settings')||'{}'),d=document.documentElement,t=s.theme||'light';d.dataset.theme=t;d.dataset.mode=(t==='dark'||t==='midnight')?'dark':'light';d.dataset.accent=s.accent||'saffron'}catch(e){}</script>
 </head>
 <body>
 <div class="app"><main id="view"></main></div>
 <div id="navwrap"></div>
-<script type="module" src="js/app.js?v=12"></script>
+<script type="module" src="js/app.js?v=13"></script>
 </body>
 </html>

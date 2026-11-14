@@ -89,12 +89,14 @@ const markRead = (id) => {
   if (s) { S.history = [{ id, title: s.headline || s.title, section: s.section, source: s.sources[0]?.name || '', link: s.link, image: s.image, at: Date.now() }, ...S.history.filter((h) => h.id !== id)].slice(0, 300); LS.set('history', S.history); }
 };
 const unread = (list) => list.filter((s) => !S.read.has(s.id));
-document.documentElement.dataset.theme = S.settings.theme;
+const DARK_THEMES = ['dark', 'midnight'];
+function applyTheme() { const d = document.documentElement; d.dataset.theme = S.settings.theme; d.dataset.mode = DARK_THEMES.includes(S.settings.theme) ? 'dark' : 'light'; d.dataset.accent = S.settings.accent || 'saffron'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(d).getPropertyValue('--bg').trim() || '#0D0E12'; }
+applyTheme();
 
 const HUES = { mumbai: 172, india: 30, world: 214, markets: 256, money: 282, gold: 44, knowledge: 226, health: 145, sports: 98, gadgets: 192, phones: 202, bollywood: 330, movies: 300, viral: 356, spiritual: 18 };
 const ICONS = { sports: 'trophy', knowledge: 'bulb' };
 function secColors(id) {
-  const h = HUES[id] ?? 220; const light = document.documentElement.dataset.theme === 'light';
+  const h = HUES[id] ?? 220; const light = document.documentElement.dataset.mode === 'light';
   return light ? { color: `hsl(${h} 78% 93%)`, tint: `hsl(${h} 62% 30%)`, solid: `hsl(${h} 62% 44%)` } : { color: `hsl(${h} 34% 17%)`, tint: `hsl(${h} 72% 76%)`, solid: `hsl(${h} 60% 55%)` };
 }
 const secMeta = (id) => { const base = (S.news?.sections || []).find((s) => s.id === id) || { id, name: id, short: id, icon: ICONS[id] || 'globe' }; return { ...base, icon: ICONS[id] || base.icon, ...secColors(id) }; };
@@ -300,7 +302,7 @@ function viewSection(id) {
 
 function viewExplore() {
   const n = S.news;
-  const tile = (href, hue, icon, title, sub) => { const light = document.documentElement.dataset.theme === 'light'; const bg = light ? `hsl(${hue} 78% 93%)` : `hsl(${hue} 34% 17%)`; const ink = light ? `hsl(${hue} 62% 30%)` : `hsl(${hue} 72% 76%)`; return `<a class="stile" href="${href}" style="background:${bg}"><span class="ic" style="color:${ink}">${ic(icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(title)}</b><span class="xs" style="color:${ink}">${esc(sub)}</span></span></a>`; };
+  const tile = (href, hue, icon, title, sub) => { const light = document.documentElement.dataset.mode === 'light'; const bg = light ? `hsl(${hue} 78% 93%)` : `hsl(${hue} 34% 17%)`; const ink = light ? `hsl(${hue} 62% 30%)` : `hsl(${hue} 72% 76%)`; return `<a class="stile" href="${href}" style="background:${bg}"><span class="ic" style="color:${ink}">${ic(icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(title)}</b><span class="xs" style="color:${ink}">${esc(sub)}</span></span></a>`; };
   const tiles = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="stile" href="#section/${id}" style="background:${m.color}"><span class="ic" style="color:${m.tint}">${ic(m.icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(m.name)}</b><span class="xs" style="color:${m.tint}">${c} new</span></span></a>`; }).join('');
   return `<div class="top"><h1 class="h1">Explore</h1><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div>
   <a class="search mt8" href="#search">${ic('search', 18)}<span class="muted">Search all news</span></a>
@@ -635,7 +637,10 @@ function viewSettings() {
   const st = S.settings;
   return `${backBar()}<h1 class="h1 mt8">Settings</h1>
   <div class="field"><label for="nm">Your name</label><input class="inp" id="nm" data-set="name" value="${esc(st.name)}" placeholder="Your name"></div>
-  <div class="toggle mt12"><span>Light theme</span><button class="sw ${st.theme === 'light' ? 'on' : ''}" data-act="theme" aria-label="Light theme" aria-pressed="${st.theme === 'light'}"></button></div>
+  <div class="sec-head"><span class="h2">Look</span></div>
+  <div class="themes">${[['light', 'Light', '#F7F5F0', '#16171B', '#E6E2D9'], ['sepia', 'Paper', '#F4ECDD', '#2B2217', '#E3D6BE'], ['dark', 'Dark', '#0D0E12', '#F4F2EE', '#23262E'], ['midnight', 'Midnight', '#0B1220', '#EEF2FA', '#233050']].map(([id, name, bg, fg, ln]) => `<button class="thm ${st.theme === id ? 'on' : ''}" data-act="settheme" data-v="${id}" style="background:${bg};color:${fg};box-shadow:inset 0 0 0 1px ${ln}"><b style="font-size:14px">${name}</b><i style="background:${fg};opacity:.85;width:70%"></i><i style="background:${fg};opacity:.35;width:90%"></i><i style="background:var(--accent);width:40%"></i></button>`).join('')}</div>
+  <div class="small muted mt16">Accent colour</div>
+  <div class="accents">${[['saffron', '#E8650A', 'Saffron'], ['ocean', '#1F6FD1', 'Ocean'], ['emerald', '#0E8A5F', 'Emerald'], ['violet', '#6D4AD8', 'Violet'], ['rose', '#D6336C', 'Rose']].map(([id, col, name]) => `<button class="acc ${(st.accent || 'saffron') === id ? 'on' : ''}" data-act="setaccent" data-v="${id}" style="background:${col}" aria-label="${name}">${(st.accent || 'saffron') === id ? ic('check', 18, 3) : ''}</button>`).join('')}</div>
   <div class="sec-head"><span class="h2">Sections on Home</span></div>
   ${DEFAULT_SECTIONS.map((id) => `<div class="toggle"><span>${esc(secMeta(id).name)}</span><button class="sw ${st.sections.includes(id) ? 'on' : ''}" data-act="sec" data-id="${id}" aria-label="${esc(secMeta(id).name)}" aria-pressed="${st.sections.includes(id)}"></button></div>`).join('')}
   <div class="sec-head"><span class="h2">Ask Drishti (AI)</span></div>
@@ -712,7 +717,8 @@ document.addEventListener('click', async (e) => {
     rec.onend = () => { b.style.background = 'var(--card)'; b.style.color = 'var(--text)'; };
     rec.start();
   }
-  else if (act === 'theme') { S.settings.theme = S.settings.theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = S.settings.theme; saveSettings(); render(); }
+  else if (act === 'settheme') { S.settings.theme = b.dataset.v; applyTheme(); saveSettings(); render(); }
+  else if (act === 'setaccent') { S.settings.accent = b.dataset.v; applyTheme(); saveSettings(); render(); }
   else if (act === 'sec') { const s = S.settings.sections; S.settings.sections = s.includes(id) ? s.filter((x) => x !== id) : DEFAULT_SECTIONS.filter((x) => x === id || s.includes(x)); saveSettings(); render(); }
   else if (act === 'install' && S.installEvt) { S.installEvt.prompt(); S.installEvt = null; }
   else if (act === 'clearread') { S.read = new Set(); LS.set('read', []); toast('Read history cleared'); }
