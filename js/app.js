@@ -707,7 +707,13 @@ document.addEventListener('visibilitychange', async () => {
   await loadData();
   render();
   loadWeather().then(() => { const [r] = route(); if (r === 'home' || r === '') render(); });
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => { reg.update(); setInterval(() => reg.update(), 30 * 6e4); }).catch(() => {});
+    // when a new version of the app is installed, reload once so it shows straight away
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+  }
   // check for fresh news every 5 minutes; the server refreshes every 30
   setInterval(async () => {
     if (document.visibilityState !== 'visible') return;
