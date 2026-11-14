@@ -419,7 +419,7 @@ async function summarise(stories, cache) {
   if (GEMINI_KEY) {
     for (let i = 0; i < need.length && i < 160; i += 8) {
       const batch = need.slice(i, i + 8);
-      const prompt = `You write the "Quick 60" section of an Indian morning news app. For each story below, write a neutral, factual summary of 50 to 60 words in plain English, using ONLY the facts given (headlines and snippets from trusted outlets). Do not invent numbers, names or quotes. Lead with what happened, then why it matters. Also write a short headline (max 12 words).
+      const prompt = `You write the "Quick 60" section of an Indian morning news app. For each story below, write a neutral, factual summary of 50 to 60 words in very simple, everyday English that a busy reader understands at a glance (short sentences, no jargon; explain any hard term in brackets), using ONLY the facts given (headlines and snippets from trusted outlets). Do not invent numbers, names or quotes. Lead with what happened, then why it matters. Also write a short headline (max 12 words).
 Return JSON: [{"id":"...","headline":"...","summary":"..."}]
 
 ${batch.map((s) => JSON.stringify({ id: s.id, headlines: [s.title, ...(s.alt || [])].slice(0, 4), snippet: s.desc, article_start: (s.body || '').slice(0, 1200), outlets: s.sources.map((x) => x.name) })).join('\n')}`;

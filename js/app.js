@@ -93,6 +93,14 @@ const markRead = (id) => {
   if (s) { S.history = [{ id, title: s.headline || s.title, section: s.section, source: s.sources[0]?.name || '', link: s.link, image: s.image, at: Date.now() }, ...S.history.filter((h) => h.id !== id)].slice(0, 300); LS.set('history', S.history); }
 };
 const unread = (list) => list.filter((s) => !S.read.has(s.id));
+// ---------- simple language (rewritten on this phone with the user's own Gemini key) ----------
+S.simple = LS.get('simple', {});
+for (const k of Object.keys(S.simple)) if (Date.now() - (S.simple[k].at || 0) > 4 * 864e5) delete S.simple[k];
+const LANG = () => S.settings.lang || 'en';
+const simpleOn = () => S.settings.simple !== false && !!S.settings.key;
+const simp = (s) => (simpleOn() ? S.simple[s.id + ':' + LANG()] : null);
+const H = (s) => simp(s)?.h || s.headline || s.title;
+const T = (s) => simp(s)?.t || s.summary || '';
 const DARK_THEMES = ['dark', 'midnight'];
 function applyTheme() { const d = document.documentElement; d.dataset.theme = S.settings.theme; d.dataset.mode = DARK_THEMES.includes(S.settings.theme) ? 'dark' : 'light'; d.dataset.accent = S.settings.accent || 'saffron'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(d).getPropertyValue('--bg').trim() || '#0D0E12'; }
 applyTheme();
@@ -183,7 +191,7 @@ function art(sec, size = 84, big = false) {
 }
 const img = (s, sz, big) => s.image ? `<img src="${esc(s.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:window.__art('${s.section}',${sz},${big ? 1 : 0})}).firstChild)">` : art(s.section, sz, big);
 window.__art = (sec, sz, big) => art(sec, sz, !!big);
-const storyRow = (s) => { const m = secMeta(s.section); return `<a class="story" href="#story/${s.id}"><div class="thumb">${img(s, 84)}</div><div class="col gap4 grow"><span class="tag" style="color:${m.tint}">${esc(m.short)} · ${esc(s.sources[0]?.name || '')}</span><span class="ttl clamp3">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="small muted clamp2">${esc(s.summary)}</span>` : ''}<span class="meta">${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${ic('shield', 12, 2.2)} ${s.n} sources</span>` : ''}${s.factCheck ? ` · <span style="color:var(--bad)">fact-check</span>` : ''}${s.local ? ' · <span style="color:var(--accent-text)">Near you</span>' : ''}</span></div></a>`; };
+const storyRow = (s) => { const m = secMeta(s.section); return `<a class="story" href="#story/${s.id}"><div class="thumb">${img(s, 84)}</div><div class="col gap4 grow"><span class="tag" style="color:${m.tint}">${esc(m.short)} · ${esc(s.sources[0]?.name || '')}</span><span class="ttl clamp3" data-sh="${s.id}">${esc(H(s))}</span>${s.summary ? `<span class="small muted clamp2" data-ss="${s.id}">${esc(T(s))}</span>` : ''}<span class="meta">${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${ic('shield', 12, 2.2)} ${s.n} sources</span>` : ''}${s.factCheck ? ` · <span style="color:var(--bad)">fact-check</span>` : ''}${s.local ? ' · <span style="color:var(--accent-text)">Near you</span>' : ''}</span></div></a>`; };
 const navHtml = (on) => `<nav class="nav" aria-label="Main"><div class="in">${[['home', 'home', 'Home'], ['quick', 'bolt', 'Quick 60'], ['money', 'chart', 'Money'], ['ask', 'sparkle', 'Ask'], ['explore', 'grid', 'Explore']].map(([r, i, l]) => `<a href="#${r}" class="${on === r ? 'on' : ''}">${ic(i, 22)}${l}</a>`).join('')}</div></nav>`;
 const backBar = (label = 'Back') => `<div class="top" style="padding-top:8px"><button class="back" data-act="back">${ic('back', 20, 2)}${label}</button></div>`;
 function spark(vals, w = 300, h = 90, color = 'var(--up)', fill = true) {
@@ -224,7 +232,7 @@ function viewHome() {
   return `${top}
   <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${q60 ? 'Start your Quick 60' : 'Quick 60: all read'}</b><span class="small" style="opacity:.85">${q60 ? `${q60} stories · about ${Math.max(2, Math.round(q60 * 0.25))} min` : 'New stories arrive every 30 minutes'}</span></span>${ic('chev', 22, 2)}</a>
   <div class="sec-head"><span class="h2">Top 5 right now</span><button class="xs muted row gap4" data-act="refresh" aria-label="Refresh news">${upd} ${ic('refresh', 14)}</button></div>
-  ${top5.length ? `<div class="card" style="padding:2px 14px">${top5.map((s, i) => `<a class="mk" href="#read/${s.id}"><span class="num">${i + 1}</span><div class="col gap4 grow"><span class="ttl">${esc(s.headline || s.title)}</span><span class="meta"><span style="color:${secMeta(s.section).solid};font-weight:600">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${s.n} sources</span>` : ''}${s.breaking && s.n >= 3 ? ' · <span class="badge b-live">Breaking</span>' : ''}</span></div></a>`).join('')}</div>` : `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up</div>`}
+  ${top5.length ? `<div class="card" style="padding:2px 14px">${top5.map((s, i) => `<a class="mk" href="#read/${s.id}"><span class="num">${i + 1}</span><div class="col gap4 grow"><span class="ttl" data-sh="${s.id}">${esc(H(s))}</span><span class="meta"><span style="color:${secMeta(s.section).solid};font-weight:600">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${s.n} sources</span>` : ''}${s.breaking && s.n >= 3 ? ' · <span class="badge b-live">Breaking</span>' : ''}</span></div></a>`).join('')}</div>` : `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up</div>`}
   ${(() => { const p = todoPicks('all')[0]; if (!p) return ''; const m = secMeta('events'); return `<a class="card row gap12 mt16" href="#todo" style="background:${m.color};border-color:transparent"><span class="sdot" style="width:44px;height:44px;border-radius:14px;background:var(--card);color:${m.tint}">${ic('ticket', 22, 2)}</span><span class="col grow" style="gap:2px"><b style="color:${m.tint}">Today in Mumbai</b><span class="small" style="color:var(--text)">${esc(p.n)}${p.cost ? '' : ' · free'}</span><span class="xs muted">${todoInfo().label} · tap for more ideas and events</span></span>${ic('chev', 20, 2)}</a>`; })()}
   <div class="sec-head"><span class="h2">Browse by topic</span><a href="#explore">More</a></div>
   <div class="topics">${topics}</div>
@@ -250,8 +258,8 @@ function viewQuick(tab = 'all') {
       <span class="qsrc">${avatars(s.sources, 1)}<span>${esc(src)}</span>${s.n > 1 ? `<span class="xs" style="color:var(--ok)">+${s.n - 1}</span>` : ''}</span>
       <span class="qtools"><button data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button data-act="share" data-id="${s.id}" aria-label="Share">${ic('share', 20)}</button></span></div>
       <div class="qbody">
-      <h2>${esc(s.headline || s.title)}</h2>
-      <p>${esc(s.summary || 'Tap below to read the full report.')}</p>
+      <h2 data-sh="${s.id}">${esc(H(s))}</h2>
+      <p data-ss="${s.id}">${esc(T(s) || 'Tap below to read the full report.')}</p>
       <div class="row gap8" style="flex-wrap:wrap"><span class="xs muted">${ago(s.time)} ago</span>${verify(s)}<span class="badge" style="background:${m.color};color:${m.tint}">${esc(m.short)}</span></div>
       ${s.factCheck ? `<a class="fc" href="#web/${encodeURIComponent(s.factCheck.link)}">${ic('alert', 18, 2)}<span>Related fact-check by ${esc(s.factCheck.source)}: ${esc(s.factCheck.title)}</span></a>` : ''}
       </div>
@@ -275,7 +283,7 @@ function setupQuick(start, total, tab) {
   }), { root: w, threshold: [0.6] });
   w.querySelectorAll('.qcard').forEach((c) => io.observe(c));
 }
-const storyCard = (s) => { const m = secMeta(s.section); return `<article class="scard"><a href="#story/${s.id}" class="scimg">${img(s, 200, true)}<span class="qsrc" style="bottom:10px;left:10px">${avatars(s.sources, 1)}<span>${esc(s.sources[0]?.name || '')}</span></span></a><a href="#story/${s.id}" class="col gap6" style="padding:14px 16px 4px"><span class="sct">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="scs">${esc(s.summary)}</span>` : ''}</a><div class="row gap8" style="padding:6px 16px 14px;flex-wrap:wrap">${s.price ? `<span class="badge" style="background:var(--accent-soft);color:var(--accent-text)">${ic('ticket', 12, 2)} ${esc(s.price)}</span>` : ''}<span class="xs muted">${ago(s.time)} ago</span>${verify(s)}${s.local ? '<span class="badge b-warn">Near you</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="#read/${s.id}">Read full story ${ic('chev', 12, 2)}</a></div></article>`; };
+const storyCard = (s) => { const m = secMeta(s.section); return `<article class="scard"><a href="#story/${s.id}" class="scimg">${img(s, 200, true)}<span class="qsrc" style="bottom:10px;left:10px">${avatars(s.sources, 1)}<span>${esc(s.sources[0]?.name || '')}</span></span></a><a href="#story/${s.id}" class="col gap6" style="padding:14px 16px 4px"><span class="sct" data-sh="${s.id}">${esc(H(s))}</span>${s.summary ? `<span class="scs" data-ss="${s.id}">${esc(T(s))}</span>` : ''}</a><div class="row gap8" style="padding:6px 16px 14px;flex-wrap:wrap">${s.price ? `<span class="badge" style="background:var(--accent-soft);color:var(--accent-text)">${ic('ticket', 12, 2)} ${esc(s.price)}</span>` : ''}<span class="xs muted">${ago(s.time)} ago</span>${verify(s)}${s.local ? '<span class="badge b-warn">Near you</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="#read/${s.id}">Read full story ${ic('chev', 12, 2)}</a></div></article>`; };
 
 function viewStory(id) {
   const s = S.byId[id]; if (!s) return `${backBar()}<div class="empty">This story is no longer in today’s feed.</div>`;
@@ -385,6 +393,64 @@ function viewVideos() {
 }
 
 
+const LANG_NAME = { en: 'very simple, everyday English (like explaining to a friend; short sentences; no jargon, and if a hard word is needed, explain it in brackets)', hinglish: 'simple Hinglish (Hindi written in English letters mixed with common English words, the way people chat on WhatsApp in Mumbai)', hi: 'simple, everyday Hindi in Devanagari script (avoid difficult Sanskrit words)' };
+async function gem(prompt, json = true) {
+  const models = [S.settings.model, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'].filter((v, i, a) => v && a.indexOf(v) === i);
+  for (const model of models) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(S.settings.key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, ...(json ? { responseMimeType: 'application/json' } : {}) } }) });
+    if (r.status === 429) throw new Error('limit');
+    if (!r.ok) continue;
+    const j = await r.json();
+    return j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+  }
+  throw new Error('no model');
+}
+let simpBusy = false;
+async function simplifyVisible() {
+  if (!simpleOn() || simpBusy) return;
+  const ids = [...new Set([...document.querySelectorAll('[data-sh]')].map((e) => e.dataset.sh))];
+  const todo = ids.map((id) => S.byId[id]).filter((s) => s && !simp(s)).slice(0, 10);
+  if (!todo.length) return;
+  simpBusy = true;
+  try {
+    const out = await gem(`Rewrite each news item below in ${LANG_NAME[LANG()]}. The reader is busy and wants to understand it in one quick read.
+Rules: keep every fact exactly as given, do not add anything new; headline max 10 words; summary 40 to 60 words in 3 or 4 short sentences; say what happened, then why it matters to an ordinary person in India.
+Return JSON: [{"id":"...","h":"headline","t":"summary"}]
+
+${todo.map((s) => JSON.stringify({ id: s.id, headline: s.headline || s.title, summary: s.summary })).join('\n')}`);
+    const arr = JSON.parse(out.replace(/^```json|```$/g, ''));
+    for (const x of arr) if (x.id && x.t) {
+      S.simple[x.id + ':' + LANG()] = { h: x.h, t: x.t, at: Date.now() };
+      document.querySelectorAll(`[data-sh="${x.id}"]`).forEach((e) => { if (x.h) e.textContent = x.h; });
+      document.querySelectorAll(`[data-ss="${x.id}"]`).forEach((e) => { e.textContent = x.t; });
+    }
+    LS.set('simple', S.simple);
+  } catch (e) { console.warn('simplify', e.message); simpBusy = false; return; }
+  simpBusy = false;
+  setTimeout(simplifyVisible, 1500); // next batch, gently
+}
+async function explainSimply(s, articleText) {
+  const box = $('#explain'); if (!box || !simpleOn()) return;
+  const key = s.id + ':x:' + LANG();
+  const show = (html) => { if ($('#explain') === box) box.innerHTML = `<div class="card mt16" style="background:var(--accent-soft);border-color:transparent"><span class="eyebrow" style="color:var(--accent-text)">${ic('sparkle', 14)} In simple words</span><div class="bub" style="margin-top:6px;font-size:16px;line-height:1.6">${html}</div></div>`; };
+  if (S.simple[key]) return show(md(S.simple[key].t));
+  show('<span class="typing"><span></span><span></span><span></span></span>');
+  try {
+    const out = await gem(`Explain this news story in ${LANG_NAME[LANG()]}, for someone who has 30 seconds.
+Use exactly this shape, short bullet points, no more than 110 words in total:
+**What happened:** one or two lines
+**Why it matters:** one or two lines
+**What it means for you:** one line (for a common person in Mumbai or India; say "Not much directly" if it does not affect them)
+Use only facts from the story below. Do not add anything.
+
+Headline: ${s.headline || s.title}
+Summary: ${s.summary}
+Article: ${(articleText || '').slice(0, 5000)}`, false);
+    S.simple[key] = { t: out.trim(), at: Date.now() }; LS.set('simple', S.simple);
+    show(md(out.trim()));
+  } catch (e) { if ($('#explain') === box) box.innerHTML = ''; }
+}
+
 // ---------- in-app reader ----------
 const READER_BAD = /(subscription|subscribe|newsletter|see all|sign in|log in|loading\.\.\.|premium stor|unlock|cookie|download (the|our) app|already a (member|subscriber)|e-?paper|terms of use|privacy policy|all rights reserved|follow us on|join our|whatsapp channel|recommended for you|you may also like|trending now|copyright)/i;
 const HEAD_JUNK = /^(latest|trending|related|recommended|more (from|stories|news|in)|also (read|see)|top (stories|news|videos|photos)|web stories|photos|videos|popular|most (read|viewed|popular)|you may|read next|what to read|editor'?s picks|tags|topics|follow|share|comments?)\b/i;
@@ -469,13 +535,15 @@ function viewRead(id, srcIdx) {
     try {
       const html = await articleHtml(url, s.title);
       if ($('#rbody') !== box) return;
+      explainSimply(s, new DOMParser().parseFromString(html || '', 'text/html').body.textContent);
       box.innerHTML = html || readerFallback(s, url, 'The full article could not be shown here, so this is the summary.');
-    } catch (e) { if ($('#rbody') === box) box.innerHTML = readerFallback(s, url, 'Could not load the full article right now.'); }
+    } catch (e) { if ($('#rbody') === box) box.innerHTML = readerFallback(s, url, 'Could not load the full article right now.'); explainSimply(s, ''); }
   }, 0);
   return `${backBar()}
   <div class="dimg">${img(s, 220, true)}</div>
   <div class="row gap8 mt16" style="flex-wrap:wrap"><span class="badge" style="background:${m.color};color:${m.tint}">${esc(m.short)}</span>${verify(s)}<span class="xs muted">${ago(s.time)} ago</span></div>
-  <h1 class="rt">${esc(s.headline || s.title)}</h1>
+  <h1 class="rt" data-sh="${s.id}">${esc(H(s))}</h1>
+  <div id="explain"></div>
   <div class="row gap8 mt8">${avatars([src], 1)}<span class="small" style="font-weight:600">${esc(src.name)}</span>${s.n > 1 ? `<span class="xs muted">· also reported by ${s.n - 1} more</span>` : ''}</div>
   <div id="rbody" class="mt16"><div class="col gap8">${[100, 96, 98, 70, 100, 92, 60].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div><p class="xs muted mt12">Loading the full story…</p></div>
   <div class="row gap8 mt24"><button class="btn btn-ghost" data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button class="btn btn-ghost" data-act="share" data-id="${s.id}" aria-label="Share">${ic('share', 20)}</button><a class="btn btn-line grow" href="#ask" data-act="askabout" data-id="${s.id}">${ic('sparkle', 18)} Ask about this</a></div>
@@ -687,6 +755,9 @@ function viewSettings() {
   <div class="accents">${[['saffron', '#E8650A', 'Saffron'], ['ocean', '#1F6FD1', 'Ocean'], ['emerald', '#0E8A5F', 'Emerald'], ['violet', '#6D4AD8', 'Violet'], ['rose', '#D6336C', 'Rose']].map(([id, col, name]) => `<button class="acc ${(st.accent || 'saffron') === id ? 'on' : ''}" data-act="setaccent" data-v="${id}" style="background:${col}" aria-label="${name}">${(st.accent || 'saffron') === id ? ic('check', 18, 3) : ''}</button>`).join('')}</div>
   <div class="sec-head"><span class="h2">Sections on Home</span></div>
   ${DEFAULT_SECTIONS.map((id) => `<div class="toggle"><span>${esc(secMeta(id).name)}</span><button class="sw ${st.sections.includes(id) ? 'on' : ''}" data-act="sec" data-id="${id}" aria-label="${esc(secMeta(id).name)}" aria-pressed="${st.sections.includes(id)}"></button></div>`).join('')}
+  <div class="sec-head"><span class="h2">Simple language</span></div>
+  <div class="toggle"><span class="col"><span>Rewrite news in simple words</span><span class="xs muted">${st.key ? 'Uses your Gemini key, a few stories at a time' : 'Add your Gemini key below to turn this on'}</span></span><button class="sw ${st.simple !== false ? 'on' : ''}" data-act="simple" aria-label="Simple language" aria-pressed="${st.simple !== false}"></button></div>
+  <div class="row gap8 mt12">${[['en', 'Simple English'], ['hinglish', 'Hinglish'], ['hi', 'हिंदी']].map(([id, l]) => `<button class="chip" data-act="lang" data-v="${id}" style="flex:1;justify-content:center;height:40px;${(st.lang || 'en') === id ? 'background:var(--accent-soft);color:var(--accent-text);border-color:var(--accent);font-weight:600' : ''}">${l}</button>`).join('')}</div>
   <div class="sec-head"><span class="h2">Ask Drishti (AI)</span></div>
   <div class="field"><label for="ky">Gemini API key ${st.key ? '<b style="color:var(--ok)">Saved</b>' : ''}</label><input class="inp" id="ky" data-set="key" value="${esc(st.key)}" placeholder="Paste key from aistudio.google.com/apikey" autocomplete="off" type="password"></div>
   <div class="field"><label for="md">AI model</label><input class="inp" id="md" data-set="model" value="${esc(st.model)}"></div>
@@ -730,6 +801,7 @@ function render() {
   if (!['story', 'read', 'web'].includes(r)) S.lastTab = tab;
   v.className = r === 'quick' ? 'full' : '';
   v.innerHTML = html;
+  setTimeout(simplifyVisible, 300);
   $('#navwrap').innerHTML = r === 'quick' ? '' : navHtml(tab || 'home');
 }
 let lastHash = '';
@@ -761,6 +833,8 @@ document.addEventListener('click', async (e) => {
     rec.onend = () => { b.style.background = 'var(--card)'; b.style.color = 'var(--text)'; };
     rec.start();
   }
+  else if (act === 'simple') { S.settings.simple = S.settings.simple === false; saveSettings(); render(); }
+  else if (act === 'lang') { S.settings.lang = b.dataset.v; saveSettings(); render(); }
   else if (act === 'settheme') { S.settings.theme = b.dataset.v; applyTheme(); saveSettings(); render(); }
   else if (act === 'setaccent') { S.settings.accent = b.dataset.v; applyTheme(); saveSettings(); render(); }
   else if (act === 'sec') { const s = S.settings.sections; S.settings.sections = s.includes(id) ? s.filter((x) => x !== id) : DEFAULT_SECTIONS.filter((x) => x === id || s.includes(x)); saveSettings(); render(); }
