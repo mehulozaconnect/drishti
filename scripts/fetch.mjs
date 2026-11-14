@@ -87,7 +87,7 @@ function similar(a, b) {
   const ov = inter / Math.min(wa, wb);
   return Math.max(j, ov * 0.7);
 }
-const JUNK = /e-?paper|news brief|morning brief|evening brief|news wrap|top headlines|headlines today|news highlights|live updates:|^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
+const JUNK = /\bnull\b|aum\(rs cr\)|^quarterly results of companies$|^tariffs and global trade$|diary: saturday dossier|^[^:]{0,40}(news|updates)$|\b\d+\+? (happy )?[\w' ]{0,30}(messages|wishes|greetings|quotes)\b|(wishes|messages|greetings|quotes|status)\b.{0,30}\b(wishes|messages|greetings|quotes|status)\b|e-?paper|news brief|morning brief|evening brief|news wrap|top headlines|headlines today|news highlights|live updates:|^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
 const words = (s, n) => { const w = s.split(/\s+/); return w.length <= n ? s : w.slice(0, n).join(' ').replace(/[,;:]$/, '') + '…'; };
 const hash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 12);
 
@@ -184,17 +184,19 @@ const KW = {
   markets: /\b(sensex|nifty|stocks?|shares?|market|markets|ipo|rbi|repo|inflation|gdp|rupee|earnings|profit|revenue|quarter|q[1-4]|sebi|investors?|fii|dii|crude|bonds?|economy|economic|trade deal|tariff|gst|exports?|imports?|dividend|bitcoin|crypto|ltd|limited|company|bank)\b/i,
   money: /\b(mutual funds?|sip|sips|nav|amc|elss|ppf|nps|income tax|itr|tax saving|fixed deposits?|fd rates?|savings|insurance|loan|loans|emi|credit card|personal finance|retirement|pension|epf|investment plan|wealth)\b/i,
   gold: /\b(gold|silver|bullion|jewell?ery|petrol|diesel|lpg|cng|fuel prices?|commodit(y|ies)|crude oil price|vegetable prices|tomato prices?|onion prices?)\b/i,
-  bollywood: /\b(bollywood|actor|actress|film|films|movie|box office|trailer|shah rukh|srk|salman|aamir|ranbir|alia|deepika|katrina|akshay|hrithik|kareena|ranveer|kartik|kriti|bigg boss|celebrity|celebs?|star kids?|kapoor|khan|bachchan|singer|song|music|wedding|ramayana)\b/i,
+  bollywood: /\b(bollywood|actor|actress|film|films|movie|box office|trailer|shah rukh|srk|salman|aamir|ranbir|alia|deepika|katrina|akshay|hrithik|kareena|ranveer|kartik|kriti|bigg boss|celebrity|celebs?|star kids?|bachchan|singer|ramayana|kangana|filmmaker|director)\b/i,
   movies: /\b(review|box office|collection|trailer|teaser|release|releases|ott|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|film|movie|cinema|ratings?|stars)\b/i,
   viral: /\b(viral|trending|internet|netizens|social media|video shows|caught on camera|instagram|reddit|meme|watch video|goes viral|x users)\b/i,
   phones: /\b(phone|phones|smartphone|iphone|galaxy|pixel|oneplus|xiaomi|redmi|vivo|oppo|realme|poco|motorola|nothing phone|iqoo|honor|huawei|android|ios|tablet|ipad|5g phone|flip|fold)\b/i,
-  gadgets: /\b(ai|artificial intelligence|chatgpt|openai|gemini|google|microsoft|apple|meta|tech|technology|software|app|apps|startup|laptop|chip|chips|nvidia|semiconductor|cyber|hack|hackers|outage|robot|ev|electric vehicle|tesla|spacex|isro|satellite|gadget|smartwatch|earbuds|wearable|internet|data centre|elon musk)\b/i,
+  gadgets: /\b(ai|artificial intelligence|chatgpt|openai|gemini|google|microsoft|apple|meta|tech|technology|software|app|apps|startup|laptop|chip|chips|nvidia|semiconductor|cyber|hack|hackers|outage|robot|ev|electric vehicle|tesla|spacex|isro|satellite|gadget|smartwatch|earbuds|wearable|internet|data centre|elon musk|ps5|playstation|xbox|console|gaming|gta|whatsapp|telegram|youtube)\b/i,
   health: /\b(health|healthy|hospital|doctors?|disease|dengue|malaria|covid|virus|vaccine|cancer|diabetes|heart|fitness|diet|nutrition|sleep|mental health|yoga|wellness|skin|hair|weight loss|exercise|ayurved\w*|medicine|medical|drug|icmr|lifestyle|food|foods|recipe|parenting|pregnan\w*|aqi|pollution|air quality)\b/i,
-  sports: /\b(cricket|ipl|test|odi|t20|bcci|icc|football|fifa|isl|hockey|tennis|badminton|olympics?|kabaddi|chess|f1|formula 1|athlet\w*|wickets?|innings|century|squad|coach|tournament|league|match|medal|world cup|grand prix|boxing|wrestling|kohli|rohit|gill|bumrah|dhoni|asia cup|u-?19|ranji|smat)\b/i
+  sports: /\b(cricket|ipl|test|odi|t20|bcci|icc|football|fifa|isl|hockey|tennis|badminton|olympics?|kabaddi|chess|f1|formula 1|athlet\w*|wickets?|innings|century|squad|coach|tournament|league|match|medal|world cup|grand prix|boxing|wrestling|kohli|rohit|gill|bumrah|dhoni|asia cup|u-?19|ranji|smat|final|semi-?final|quarter-?final|masters|open|championships?|champions|trophy|premier league|la liga|manchester|liverpool|arsenal|chelsea|barcelona|real madrid|pochettino|nba|atp|wta|grand slam|lakshya|sindhu|neeraj|goalkeeper|striker|batter|bowler|pacer|spinner)\b/i
 };
-const POLITICAL = /\b(bjp|congress|rahul gandhi|modi|amit shah|minister|ministers|mla|mp|cbi|ed raid|police|arrest|arrested|court|judge|custody|election|polls?|murder|killed|scam|betting|thackeray|shiv sena)\b/i;
+const POLITICAL = /\b(fir|jawan|crpf|bjp|congress|rahul gandhi|modi|amit shah|minister|ministers|mla|mp|cbi|ed raid|police|arrest|arrested|court|judge|custody|election|polls?|murder|killed|scam|betting|thackeray|shiv sena)\b/i;
 const FASHION = /\b(fashion|style|stylish|outfit|look|looks|dressed|designer|red carpet|bandhgala|saree|lehenga|brooch(es)?|gown|couture|manish malhotra|sabyasachi|celebrity|celebs?|airport look)\b/i;
-const FEED_TRUSTED_TOPIC = new Set(['sports', 'phones', 'markets', 'money']);
+const FEED_TRUSTED_TOPIC = new Set(['sports', 'markets', 'money']);
+const FILM = /\b(film|films|movie|movies|cinema|ott|box office|trailer|teaser|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|actor|actress|director|series|bollywood|tollywood|kollywood|song|review|starrer|shoot|sets?|biopic|sequel|bigg boss|iffi)\b/i;
+KW.spiritual = /\b(temple|puja|pooja|spiritual|devotees?|pilgrims?|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|kharna|prasad|katha|nahay)\b/i;
 const TOPICAL = new Set(['markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
 function chooseSection(c) {
@@ -213,6 +215,7 @@ function chooseSection(c) {
     else if (id === 'mumbai') ok = hits > 0;
     else if (id === 'world') ok = hits > 0 && !KW.mumbai.test(titles);
     else if (POLITICAL.test(titles) && !['markets', 'money', 'sports', 'gold'].includes(id)) ok = false; // politics and crime are news, not lifestyle or tech
+    else if ((id === 'movies' || id === 'bollywood') && !FILM.test(titles)) ok = false;
     else if (id === 'health' && FASHION.test(titles)) ok = false; // fashion and celebrity style are not health
     else ok = hits >= 2 || (hits >= 1 && (votes[id] || 0) >= 1) || ((votes[id] || 0) >= 3 && FEED_TRUSTED_TOPIC.has(id)); // keyword plus the topic's own feed
     if (!ok) continue;

@@ -153,7 +153,7 @@ export const SECTIONS = [
     ]
   },
   {
-    id: 'gold', name: 'Gold, silver and prices', short: 'Gold', color: '#3D2E0C', tint: '#FFD66B', icon: 'gem', weight: 0.9,
+    id: 'gold', exclude: /(snatch|robbery|robbed|theft|stolen|smuggl|seized|heist|loot)/i, name: 'Gold, silver and prices', short: 'Gold', color: '#3D2E0C', tint: '#FFD66B', icon: 'gem', weight: 0.9,
     feeds: [
       g('gold price India'),
       g('silver price India'),
@@ -250,7 +250,7 @@ export const SECTIONS = [
   },
   {
     id: 'knowledge', name: 'Knowledge', short: 'Knowledge', color: '#1E2A44', tint: '#A9C4FF', icon: 'bulb', weight: 0.7,
-    require: /(explain|what is|what are|what does|what it means|what we know|why (do|does|is|are|did|india|the|we|you)|how (do|does|is|are|did|the|india|to|a|an)|who is|who are|decoded|in charts|in numbers|everything you need|need to know|the story of|history of|understanding|a guide|the science|study finds|what happens|\?$)/i,
+    require: /(explained|explainer|\| explained|what we know|decoded|in charts|in numbers|need to know|everything you need|^(why|how|what|who|when|where|which|is|are|can|should|does|do)\b[^:]{8,}\?|^(why|how|what|who)\b.{10,}(work|works|matters|happened|means|changed|began|started|unfolded))/i,
     feeds: [
       g('site:indianexpress.com explained'),
       g('site:thehindu.com explained'),
@@ -265,8 +265,8 @@ export const SECTIONS = [
   },
   {
     id: 'spiritual', name: 'Spiritual', short: 'Spiritual', color: '#3D2410', tint: '#FFC48A', icon: 'lotus', weight: 0.6,
-    require: /\b(temple|puja|pooja|spiritual|devotee|pilgrim|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|saint|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|pandharpur|vaishno devi|kedarnath|sabarimala|jagannath)\b/i,
-    exclude: /(betting|app case|cbi|arrest|scam|fraud|ed raid|police|bjp|congress|shiv sena|mns|thackeray|politic|row over|alleg|mishap|accident|killed|dies|death|wedding|traffic|actor|actress|box office|prices?|parties|cricket|samson|threat)/i,
+    require: /\b(temple|puja|pooja|spiritual|devotee|pilgrim|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|pandharpur|vaishno devi|kedarnath|sabarimala|jagannath)\b/i,
+    exclude: /(murder|basketball|ncaa|betting|app case|cbi|arrest|scam|fraud|ed raid|police|bjp|congress|shiv sena|mns|thackeray|politic|row over|alleg|mishap|accident|killed|dies|death|wedding|traffic|actor|actress|box office|prices?|parties|cricket|samson|threat)/i,
     feeds: [
       g('spiritual India'),
       g('site:freepressjournal.in spiritual OR festival OR temple'),
