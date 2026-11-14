@@ -173,7 +173,7 @@ const avatars = (srcs, max = 4) => `<div class="row" style="gap:0">${srcs.slice(
 const verify = (s) => s.factCheck ? `<span class="badge b-bad">${ic('alert', 12, 2.2)}Related fact-check</span>` : s.n >= 2 ? `<span class="badge b-ok">${ic('shield', 12, 2.2)}Confirmed by ${s.n} sources</span>` : `<span class="badge b-one">Single source</span>`;
 function art(sec, size = 84, big = false) {
   const m = secMeta(sec);
-  return `<div class="art" style="background:${m.color}"><svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><circle cx="72" cy="30" r="${big ? 22 : 26}" fill="${m.tint}" fill-opacity=".16"/><circle cx="20" cy="88" r="30" fill="${m.tint}" fill-opacity=".08"/></svg><span style="position:absolute;color:${m.tint}">${ic(m.icon, big ? 54 : Math.round(size / 3), 1.5)}</span></div>`;
+  return `<div class="art" style="background:${m.color}"><svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><circle cx="72" cy="30" r="${big ? 22 : 26}" fill="${m.tint}" fill-opacity=".16"/><circle cx="20" cy="88" r="30" fill="${m.tint}" fill-opacity=".08"/></svg><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:${m.tint}">${ic(m.icon, big ? 54 : Math.round(size / 3), 1.5)}</span></div>`;
 }
 const img = (s, sz, big) => s.image ? `<img src="${esc(s.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:window.__art('${s.section}',${sz},${big ? 1 : 0})}).firstChild)">` : art(s.section, sz, big);
 window.__art = (sec, sz, big) => art(sec, sz, !!big);
@@ -411,7 +411,7 @@ async function readable(url) {
     out.push(el.tagName === 'LI' ? `<p class="rp">• ${esc(t)}</p>` : el.tagName === 'BLOCKQUOTE' ? `<p class="rp" style="border-left:3px solid var(--accent);padding-left:12px;border-radius:0">${esc(t)}</p>` : `<p class="rp">${esc(t)}</p>`);
     words += t.split(' ').length;
   });
-  return words > 80 ? tidyHeads(out).join('') : '';
+  return words > 120 ? tidyHeads(out).join('') : '';
 }
 async function loadArticle(url) {
   const key = 'art:' + url;
@@ -424,8 +424,8 @@ async function loadArticle(url) {
   return md;
 }
 async function articleHtml(url, title) {
-  try { const h = await readable(url); if (h) return h; } catch (e) { console.warn('readability', e); }
-  return readerHtml(await loadArticle(url), title);
+  if (/(newscomm|#comments|\/comments?\/)/i.test(url)) return '';
+  try { return await readable(url); } catch (e) { console.warn('readability', e); return ''; }
 }
 function viewRead(id, srcIdx) {
   const s = S.byId[id]; if (!s) return `${backBar()}<div class="empty">This story is no longer in today’s feed.</div>`;
@@ -438,7 +438,7 @@ function viewRead(id, srcIdx) {
     try {
       const html = await articleHtml(url, s.title);
       if ($('#rbody') !== box) return;
-      box.innerHTML = html || readerFallback(s, url, 'This site shows only part of its story outside its own page.');
+      box.innerHTML = html || readerFallback(s, url, 'The full article could not be shown here, so this is the summary.');
     } catch (e) { if ($('#rbody') === box) box.innerHTML = readerFallback(s, url, 'Could not load the full article right now.'); }
   }, 0);
   return `${backBar()}

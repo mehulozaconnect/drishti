@@ -132,7 +132,7 @@ function parseFeed(xml, feedUrl) {
     }
     const dateStr = txt(it.pubDate) || txt(it.published) || txt(it.updated) || txt(it['dc:date']);
     const t = Date.parse(dateStr);
-    if (!title || !link || isNaN(t)) continue;
+    if (!title || !link || isNaN(t) || /(newscomm|#comments)/i.test(link)) continue;
     const desc = isG ? '' : clean(descHtml);
     out.push({ title, link, publisher, pubUrl, time: Math.min(t, NOW), desc: desc.length > 40 && !desc.startsWith(title.slice(0, 30)) ? desc : '', image: isG ? null : pickImage(it, descHtml) });
   }
@@ -282,6 +282,7 @@ function stripTitle(sum, title) {
   if (sum.toLowerCase().startsWith(t)) { const cut = sum.slice(title.length).replace(/^[\s.:|–—-]+/, ''); if (cut.length > 60) sum = cut; }
   return sum.trim();
 }
+const COMMENTS = /(newscomm|\/comments?\/|#comments|comment\.php|\/forum|\/reviews?comm)/i;
 async function pool(items, n, fn) { const q = [...items]; await Promise.all(Array.from({ length: n }, async () => { while (q.length) await fn(q.shift()); })); }
 
 async function enrich(stories, cache) {
@@ -291,6 +292,8 @@ async function enrich(stories, cache) {
     const c = cache[s.id] ||= { n: 0, at: NOW };
     const direct = [...new Set([...(s.link.includes('news.google.com') ? [] : [s.link]), ...(s.links || [])])];
     const tryUrl = async (u) => {
+      if (COMMENTS.test(u)) { c.bad = c.bad ?? true; return false; }
+      c.bad = false;
       try {
         const a = extractArticle(await fetchText(u, 10000, { Accept: 'text/html' }));
         if (a.image && !c.img) c.img = a.image;
@@ -487,6 +490,7 @@ async function main() {
   const topPerSec = new Set(SECTIONS.flatMap((sec) => all.filter((x) => x.section === sec.id).slice(0, 12).map((x) => x.id)));
   const toSummarise = all.filter((s) => q.has(s.id) || topPerSec.has(s.id) || s.n >= 3).slice(0, 220);
   await enrich(toSummarise, cache);
+  { const bad = new Set(toSummarise.filter((x) => cache[x.id]?.bad || COMMENTS.test(x.link)).map((x) => x.id)); if (bad.size) { all = all.filter((x) => !bad.has(x.id)); log('dropped comment-page stories', bad.size); } }
   await summarise(toSummarise, cache);
   for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; delete s.desc; delete s.alt; delete s.body; delete s.links; delete s.glinks; }
 
