@@ -87,7 +87,7 @@ function similar(a, b) {
   const ov = inter / Math.min(wa, wb);
   return Math.max(j, ov * 0.7);
 }
-const JUNK = /^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
+const JUNK = /e-?paper|^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
 const words = (s, n) => { const w = s.split(/\s+/); return w.length <= n ? s : w.slice(0, n).join(' ').replace(/[,;:]$/, '') + '…'; };
 const hash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 12);
 

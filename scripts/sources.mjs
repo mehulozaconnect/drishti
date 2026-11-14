@@ -265,7 +265,7 @@ export const SECTIONS = [
   },
   {
     id: 'spiritual', name: 'Spiritual', short: 'Spiritual', color: '#3D2410', tint: '#FFC48A', icon: 'lotus', weight: 0.6,
-    require: /(temple|puja|pooja|spiritual|devotee|pilgrim|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|saint|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|pandharpur|vaishno devi|kedarnath|sabarimala|jagannath)/i,
+    require: /\b(temple|puja|pooja|spiritual|devotee|pilgrim|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|saint|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|pandharpur|vaishno devi|kedarnath|sabarimala|jagannath)\b/i,
     exclude: /(betting|app case|cbi|arrest|scam|fraud|ed raid|police|bjp|congress|shiv sena|mns|thackeray|politic|row over|alleg|mishap|accident|killed|dies|death|wedding|traffic|actor|actress|box office|prices?|parties|cricket|samson|threat)/i,
     feeds: [
       g('spiritual India'),
