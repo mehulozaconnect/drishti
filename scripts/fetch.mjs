@@ -242,24 +242,28 @@ function extractArticle(html) {
   let image = meta('og:image') || meta('twitter:image');
   if (image && !/^https:/.test(image)) image = null;
   const ogd = clean(meta('og:description') || meta('description') || '');
-  let text = '';
-  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    const ab = /"articleBody"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(m[1]);
-    if (ab) { try { text = clean(JSON.parse('"' + ab[1] + '"')); } catch { text = clean(ab[1]); } if (text.length > 200) break; }
+  // paragraphs first (cleanest), JSON-LD articleBody as a fallback
+  const paras = [];
+  const bodyHtml = html.replace(/<(header|footer|nav|aside|figure|figcaption)[\s\S]*?<\/\1>/gi, ' ');
+  for (const m of bodyHtml.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)) {
+    const t = clean(m[1]);
+    if (t.length >= 70 && /[.!?]["’”]?$/.test(t) && !BOILER.test(t) && !paras.includes(t)) paras.push(t);
+    if (paras.join(' ').length > 1600) break;
   }
+  let text = paras.join(' ');
   if (text.length < 200) {
-    const paras = [];
-    for (const m of html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)) {
-      const t = clean(m[1]);
-      if (t.length >= 70 && !BOILER.test(t) && !paras.includes(t)) paras.push(t);
-      if (paras.join(' ').length > 1600) break;
+    for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+      const ab = /"articleBody"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(m[1]);
+      if (!ab) continue;
+      let t; try { t = clean(JSON.parse('"' + ab[1] + '"')); } catch { t = clean(ab[1]); }
+      const dots = (t.match(/[.!?]/g) || []).length;
+      if (t.length > 200 && dots >= t.length / 400) { text = t; break; }
     }
-    text = paras.join(' ');
   }
   return { image, ogd, text: text.slice(0, 1800) };
 }
 function extractive(text, fallback) {
-  const src = (text && text.length > 150 ? text : fallback || '').replace(/\s+/g, ' ').trim();
+  const src = (text && text.length > 150 ? text : fallback || '').replace(/\s+/g, ' ').replace(/^[A-Z][A-Za-z .]{2,30}:\s/, '').trim();
   if (!src) return '';
   const sents = src.match(/[^.!?]+[.!?]+["’”]?(\s|$)/g) || [src];
   let out = '';
@@ -273,20 +277,17 @@ async function enrich(stories, cache) {
   let ok = 0, dec = 0;
   await pool(need, 8, async (s) => {
     const c = cache[s.id] ||= { n: 0, at: NOW };
-    let url = s.link;
-    if (url.includes('news.google.com')) {
-      const alt = s.links?.find((l) => !l.includes('news.google.com'));
-      url = alt || await decodeGoogle(url) || url;
-      if (!url.includes('news.google.com')) dec++;
-    }
-    c.url = url.includes('news.google.com') ? null : url;
-    c.text = ''; 
-    if (c.url) {
+    const cands = [...(s.links || [])];
+    if (s.link.includes('news.google.com')) { const d = await decodeGoogle(s.link); if (d) { cands.push(d); dec++; } }
+    else if (!cands.includes(s.link)) cands.unshift(s.link);
+    c.url = cands[0] || null; c.text = '';
+    for (const u of cands.slice(0, 3)) {
       try {
-        const html = await fetchText(c.url, 10000, { Accept: 'text/html' });
-        const a = extractArticle(html);
-        c.text = a.text; c.ogd = a.ogd; if (a.image) c.img = a.image; ok++;
-      } catch { /* blocked or slow: keep feed snippet */ }
+        const a = extractArticle(await fetchText(u, 10000, { Accept: 'text/html' }));
+        if (a.image && !c.img) c.img = a.image;
+        if (a.ogd && !c.ogd) c.ogd = a.ogd;
+        if (a.text.length > 150) { c.text = a.text; c.url = u; ok++; break; }
+      } catch { /* blocked or slow, try the next outlet */ }
     }
   });
   log(`enrich: ${need.length} new, ${dec} google links decoded, ${ok} articles read`);

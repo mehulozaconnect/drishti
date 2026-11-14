@@ -80,7 +80,6 @@ export const SECTIONS = [
       'https://www.thehindu.com/news/cities/mumbai/feeder/default.rss',
       'https://www.freepressjournal.in/stories.rss?section=mumbai',
       'https://www.mid-day.com/Resources/midday/rss/mumbai-news.xml',
-      'https://www.mid-day.com/rss/mumbai-news.xml',
       g('site:mid-day.com Mumbai'),
       g('site:freepressjournal.in Mumbai'),
       g('site:freepressjournal.in Malad OR Kandivali OR Goregaon OR Borivali'),
