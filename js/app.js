@@ -101,7 +101,20 @@ const WMO = (c, day = 1) => {
   if (c <= 48) return ['Hazy', 'fog']; if (c <= 57) return ['Drizzle', 'rain']; if (c <= 67) return ['Rain', 'rain'];
   if (c <= 77) return ['Snow', 'cloud']; if (c <= 82) return ['Showers', 'rain']; return ['Thunderstorm', 'storm'];
 };
-const aqiLabel = (a) => a == null ? '' : a <= 50 ? 'Good' : a <= 100 ? 'Moderate' : a <= 150 ? 'Poor for sensitive' : a <= 200 ? 'Unhealthy' : a <= 300 ? 'Very unhealthy' : 'Hazardous';
+const aqiLabel = (a) => a == null ? '' : a <= 50 ? 'Good' : a <= 100 ? 'Satisfactory' : a <= 200 ? 'Moderate' : a <= 300 ? 'Poor' : a <= 400 ? 'Very poor' : 'Severe';
+const aqiColor = (a) => a == null ? 'var(--muted)' : a <= 100 ? 'var(--ok)' : a <= 200 ? 'var(--warn)' : 'var(--bad)';
+// India's National AQI (CPCB): highest sub-index of 24-hour average PM2.5 and PM10
+function subIndex(c, bp) { for (const [lo, hi, ilo, ihi] of bp) if (c <= hi) return ilo + ((ihi - ilo) * (c - lo)) / (hi - lo); return 500; }
+const BP25 = [[0, 30, 0, 50], [30, 60, 50, 100], [60, 90, 100, 200], [90, 120, 200, 300], [120, 250, 300, 400], [250, 380, 400, 500]];
+const BP10 = [[0, 50, 0, 50], [50, 100, 50, 100], [100, 250, 100, 200], [250, 350, 200, 300], [350, 430, 300, 400], [430, 510, 400, 500]];
+function indianAqi(a) {
+  const h = a?.hourly; if (!h) return null;
+  const now = Date.now(); const idx = h.time.map((t, i) => [new Date(t).getTime(), i]).filter(([t]) => t <= now && t > now - 864e5).map(([, i]) => i);
+  const avg = (arr) => { const v = idx.map((i) => arr[i]).filter((x) => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+  const p25 = avg(h.pm2_5), p10 = avg(h.pm10);
+  if (p25 == null && p10 == null) return null;
+  return { aqi: Math.round(Math.max(p25 != null ? subIndex(p25, BP25) : 0, p10 != null ? subIndex(p10, BP10) : 0)), pm25: p25, pm10: p10, main: (p25 != null ? subIndex(p25, BP25) : 0) >= (p10 != null ? subIndex(p10, BP10) : 0) ? 'PM2.5' : 'PM10' };
+}
 function getPosition() {
   return new Promise((res) => {
     if (!navigator.geolocation) return res(null);
@@ -110,7 +123,7 @@ function getPosition() {
 }
 async function loadWeather(force) {
   const cached = LS.get('weather', null);
-  if (!force && cached && Date.now() - cached.t < 20 * 6e4) { S.weather = cached; return; }
+  if (!force && cached && cached.v === 2 && Date.now() - cached.t < 20 * 6e4) { S.weather = cached; return; }
   let loc = await getPosition();
   const last = LS.get('loc', null);
   if (!loc) loc = last || { lat: 19.1869, lon: 72.8484, name: 'Malad West', fallback: true };
@@ -125,9 +138,9 @@ async function loadWeather(force) {
   try {
     const [w, a] = await Promise.all([
       fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m&hourly=temperature_2m,precipitation_probability,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`).then((r) => r.json()),
-      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${loc.lat}&longitude=${loc.lon}&current=us_aqi,pm2_5,pm10&timezone=auto`).then((r) => r.json()).catch(() => null)
+      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${loc.lat}&longitude=${loc.lon}&hourly=pm2_5,pm10&past_days=1&forecast_days=1&timezone=auto`).then((r) => r.json()).catch(() => null)
     ]);
-    S.weather = { t: Date.now(), loc, w, aqi: a?.current?.us_aqi ?? null, pm25: a?.current?.pm2_5 ?? null };
+    const ia = indianAqi(a); S.weather = { t: Date.now(), loc, w, aqi: ia?.aqi ?? null, pm25: ia?.pm25 ?? null, pm10: ia?.pm10 ?? null, aqiMain: ia?.main || '', v: 2 };
     LS.set('weather', S.weather);
   } catch (e) { S.weather = cached; }
 }
@@ -169,7 +182,7 @@ function viewHome() {
   let weather = `<button class="weather" data-act="weather"><div class="skel" style="width:60px;height:40px"></div><div class="col grow gap4"><div class="skel" style="height:14px;width:60%"></div><div class="skel" style="height:12px;width:40%"></div></div></button>`;
   if (w?.w?.current) {
     const c = w.w.current, d = w.w.daily; const [lab, icn] = WMO(c.weather_code, c.is_day);
-    weather = `<button class="weather" data-act="weather"><span style="color:var(--accent-text)">${ic(icn, 36, 1.6)}</span><div class="col"><span class="t">${Math.round(c.temperature_2m)}°</span></div><div class="col grow" style="gap:1px"><span style="font-weight:600;font-size:14px" class="row gap4">${ic('pin', 14, 2)}${esc(w.loc.name)}${w.loc.fallback ? ' <span class="xs muted">(allow location)</span>' : ''}</span><span class="small muted">${lab} · H ${Math.round(d.temperature_2m_max[0])}° L ${Math.round(d.temperature_2m_min[0])}° · Rain ${d.precipitation_probability_max[0] ?? 0}%</span>${w.aqi != null ? `<span class="xs" style="color:${w.aqi > 150 ? 'var(--bad)' : w.aqi > 100 ? 'var(--warn)' : 'var(--ok)'}">AQI ${Math.round(w.aqi)} · ${aqiLabel(w.aqi)}</span>` : ''}</div>${ic('chev', 18)}</button>`;
+    weather = `<button class="weather" data-act="weather"><span style="color:var(--accent-text)">${ic(icn, 36, 1.6)}</span><div class="col"><span class="t">${Math.round(c.temperature_2m)}°</span></div><div class="col grow" style="gap:1px"><span style="font-weight:600;font-size:14px" class="row gap4">${ic('pin', 14, 2)}${esc(w.loc.name)}${w.loc.fallback ? ' <span class="xs muted">(allow location)</span>' : ''}</span><span class="small muted">${lab} · H ${Math.round(d.temperature_2m_max[0])}° L ${Math.round(d.temperature_2m_min[0])}°${(d.precipitation_probability_max[0] ?? 0) >= 30 ? ` · <span style="color:#5BA4F5">Rain likely ${d.precipitation_probability_max[0]}%</span>` : ''}</span>${w.aqi != null ? `<span class="xs" style="color:${aqiColor(w.aqi)}">AQI ${w.aqi} · ${aqiLabel(w.aqi)}</span>` : ''}</div>${ic('chev', 18)}</button>`;
   }
   const tick = [['nifty', 'Nifty 50'], ['sensex', 'Sensex'], ['gold', 'Gold 24K · 10g'], ['silver', 'Silver · 1kg'], ['usdinr', 'USD / INR'], ['brent', 'Brent crude']].filter(([k]) => q[k]).map(([k, l]) => { const x = q[k]; const rupee = k === 'gold' || k === 'silver'; return `<a class="tile" href="#money"><span class="xs muted">${l}</span><span class="v">${rupee ? '₹' + Math.round(x.price).toLocaleString('en-IN') : k === 'brent' ? '$' + num(x.price) : num(x.price, k === 'usdinr' ? 2 : 0)}</span><div class="row sp"><span class="xs ${x.pct >= 0 ? 'up' : 'down'}">${pct(x.pct)}</span>${x.spark?.length > 3 ? `<span style="width:52px;height:18px;display:block">${spark(x.spark, 52, 18, x.pct >= 0 ? 'var(--up)' : 'var(--down)', false)}</span>` : ''}</div></a>`; }).join('');
   if (!n) return `${header()}<div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div>${weather}<div class="empty mt24">Fetching today’s news…</div>`;
@@ -416,7 +429,7 @@ function newsContext() {
   const n = S.news; const q = S.markets?.quotes || {};
   const top = (n?.stories || []).slice().sort((a, b) => b.score - a.score).slice(0, 70);
   const mk = ['nifty', 'sensex', 'bank', 'gold', 'silver', 'usdinr', 'brent'].filter((k) => q[k]).map((k) => `${q[k].name}: ${Math.round(q[k].price * 100) / 100} (${pct(q[k].pct)})`).join('; ');
-  const w = S.weather?.w?.current ? `Weather in ${S.weather.loc.name}: ${Math.round(S.weather.w.current.temperature_2m)}°C, ${WMO(S.weather.w.current.weather_code)[0]}, AQI ${Math.round(S.weather.aqi ?? 0)}.` : '';
+  const w = S.weather?.w?.current ? `Weather in ${S.weather.loc.name}: ${Math.round(S.weather.w.current.temperature_2m)}°C, ${WMO(S.weather.w.current.weather_code)[0]}, India AQI ${S.weather.aqi ?? 'n/a'} (${aqiLabel(S.weather.aqi)}).` : '';
   return `Today is ${new Date().toLocaleString('en-IN', { dateStyle: 'full', timeStyle: 'short' })} IST. User lives in Mumbai (Malad West). ${w}\nMarkets: ${mk}\n\nToday's verified news (section | headline | summary | outlets):\n${top.map((s) => `- ${s.section} | ${s.headline || s.title} | ${s.summary || ''} | ${s.sources.map((x) => x.name).join(', ')}`).join('\n')}`;
 }
 async function ask(qText) {
@@ -468,13 +481,14 @@ function weatherSheet() {
   const w = S.weather; if (!w?.w) return;
   const c = w.w.current, h = w.w.hourly, d = w.w.daily; const [lab, icn] = WMO(c.weather_code, c.is_day);
   const nowI = h.time.findIndex((t) => new Date(t).getTime() > Date.now() - 36e5);
-  const hrs = h.time.slice(nowI, nowI + 24).map((t, i) => { const k = nowI + i; return `<div class="hr"><span class="muted">${i ? new Date(t).toLocaleTimeString('en-IN', { hour: 'numeric' }) : 'Now'}</span><span style="color:var(--accent-text)">${ic(WMO(h.weather_code[k], h.is_day[k])[1], 20)}</span><b>${Math.round(h.temperature_2m[k])}°</b><span style="color:#5BA4F5">${h.precipitation_probability[k] ?? 0}%</span></div>`; }).join('');
-  const days = d.time.map((t, i) => `<div class="row" style="padding:9px 0;border-bottom:1px solid var(--line)"><span style="width:56px" class="small">${i ? new Date(t).toLocaleDateString('en-IN', { weekday: 'short' }) : 'Today'}</span><span style="color:var(--accent-text)">${ic(WMO(d.weather_code[i])[1], 18)}</span><span class="xs" style="color:#5BA4F5;width:40px">${d.precipitation_probability_max[i] ?? 0}%</span><span class="grow"></span><span class="small muted">${Math.round(d.temperature_2m_min[i])}°</span><span style="width:60px;height:4px;border-radius:2px;background:linear-gradient(90deg,#5BA4F5,#FF7A1A)"></span><span class="small" style="font-weight:600">${Math.round(d.temperature_2m_max[i])}°</span></div>`).join('');
+  const hrs = h.time.slice(nowI, nowI + 24).map((t, i) => { const k = nowI + i; return `<div class="hr"><span class="muted">${i ? new Date(t).toLocaleTimeString('en-IN', { hour: 'numeric' }) : 'Now'}</span><span style="color:var(--accent-text)">${ic(WMO(h.weather_code[k], h.is_day[k])[1], 20)}</span><b>${Math.round(h.temperature_2m[k])}°</b>${(h.precipitation_probability[k] ?? 0) >= 10 ? `<span style="color:#5BA4F5">${ic('drop', 10)}${h.precipitation_probability[k]}%</span>` : ''}</div>`; }).join('');
+  const days = d.time.map((t, i) => `<div class="row" style="padding:9px 0;border-bottom:1px solid var(--line)"><span style="width:56px" class="small">${i ? new Date(t).toLocaleDateString('en-IN', { weekday: 'short' }) : 'Today'}</span><span style="color:var(--accent-text)">${ic(WMO(d.weather_code[i])[1], 18)}</span><span class="xs" style="color:#5BA4F5;width:44px">${(d.precipitation_probability_max[i] ?? 0) >= 10 ? d.precipitation_probability_max[i] + '%' : ''}</span><span class="grow"></span><span class="small muted">${Math.round(d.temperature_2m_min[i])}°</span><span style="width:60px;height:4px;border-radius:2px;background:linear-gradient(90deg,#5BA4F5,#FF7A1A)"></span><span class="small" style="font-weight:600">${Math.round(d.temperature_2m_max[i])}°</span></div>`).join('');
   const bg = document.createElement('div'); bg.className = 'sheet-bg';
   bg.innerHTML = `<div class="sheet" role="dialog" aria-label="Weather"><div class="row sp"><span class="row gap6 small muted">${ic('pin', 14, 2)}${esc(w.loc.name)}${w.loc.city && w.loc.city !== w.loc.name ? ', ' + esc(w.loc.city) : ''}</span><button class="ibtn" data-close aria-label="Close">${ic('x')}</button></div>
   <div class="row gap12 mt8"><span style="color:var(--accent-text)">${ic(icn, 52, 1.5)}</span><div class="col"><span style="font-size:48px;font-weight:600;letter-spacing:-2px;line-height:1">${Math.round(c.temperature_2m)}°</span><span class="small muted">${lab} · feels like ${Math.round(c.apparent_temperature)}°</span></div></div>
-  <div class="grid3 mt16"><div class="mtile"><span class="xs muted">${ic('drop', 12)} Humidity</span><span class="v">${c.relative_humidity_2m}%</span></div><div class="mtile"><span class="xs muted">${ic('wind', 12)} Wind</span><span class="v">${Math.round(c.wind_speed_10m)} <span class="xs">km/h</span></span></div><div class="mtile"><span class="xs muted">AQI (US)</span><span class="v" style="color:${(w.aqi ?? 0) > 150 ? 'var(--bad)' : (w.aqi ?? 0) > 100 ? 'var(--warn)' : 'var(--ok)'}">${w.aqi != null ? Math.round(w.aqi) : '–'}</span></div></div>
-  ${w.aqi > 150 ? `<div class="fc mt12">${ic('alert', 18, 2)}<span>Air quality is poor. Wear an N95 mask outdoors and avoid outdoor exercise today.</span></div>` : ''}
+  <div class="grid3 mt16"><div class="mtile"><span class="xs muted">${ic('drop', 12)} Humidity</span><span class="v">${c.relative_humidity_2m}%</span></div><div class="mtile"><span class="xs muted">${ic('wind', 12)} Wind</span><span class="v">${Math.round(c.wind_speed_10m)} <span class="xs">km/h</span></span></div><div class="mtile"><span class="xs muted">AQI</span><span class="v" style="color:${aqiColor(w.aqi)}">${w.aqi ?? '–'}</span><span class="xs" style="color:${aqiColor(w.aqi)}">${aqiLabel(w.aqi)}</span></div></div>
+  ${w.aqi != null ? `<p class="xs muted" style="margin:8px 0 0">India AQI (CPCB scale), 24-hour average · PM2.5 ${Math.round(w.pm25 ?? 0)} · PM10 ${Math.round(w.pm10 ?? 0)} µg/m³</p>` : ''}
+  ${w.aqi > 200 ? `<div class="fc mt12">${ic('alert', 18, 2)}<span>Air quality is poor. Wear an N95 mask outdoors and avoid outdoor exercise today.</span></div>` : w.aqi > 100 ? `<div class="fc mt12" style="background:var(--warn-bg);color:var(--warn)">${ic('alert', 18, 2)}<span>Moderate air. Children, elders and people with asthma should limit long outdoor activity.</span></div>` : ''}
   ${(d.precipitation_probability_max[0] ?? 0) >= 60 ? `<div class="fc mt12" style="background:#13233F;color:#9DB8F5">${ic('rain', 18, 2)}<span>High chance of rain today. Carry an umbrella and check local train updates.</span></div>` : ''}
   <div class="sec-head" style="margin-top:18px"><span class="h2" style="font-size:17px">Next 24 hours</span></div><div class="hrs">${hrs}</div>
   <div class="sec-head" style="margin-top:18px"><span class="h2" style="font-size:17px">7 days</span><span class="xs muted">UV max ${Math.round(d.uv_index_max[0])}</span></div>${days}
