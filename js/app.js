@@ -317,7 +317,9 @@ function viewVideos() {
 
 
 // ---------- in-app reader ----------
-const READER_JUNK = /^(advertisement|also read|read more|read also|recommended|trending|follow us|subscribe|sign in|log ?in|share|copy link|whatsapp|facebook|twitter|telegram|google news|story continues|click here|download|for more|stay updated|first published|updated:|last updated|published:|edited by|written by|by\s|photo:|image:|file photo|representational|catch all|get the latest|you may also like|related|tags?:|topics?:|disclaimer|©)/i;
+const READER_BAD = /(subscription|subscribe|newsletter|see all|sign in|log in|loading\.\.\.|premium stor|unlock|cookie|download (the|our) app|already a (member|subscriber)|e-?paper|terms of use|privacy policy|all rights reserved|follow us on|join our|whatsapp channel|recommended for you|you may also like|trending now|copyright)/i;
+const camelJunk = (t) => (t.match(/[a-z][A-Z][a-z]/g) || []).length >= 2;
+const READER_JUNK = /^(advertisement|also read|read more|read also|recommended|trending|follow us|subscribe|sign in|log ?in|share|copy link|whatsapp|facebook|twitter|telegram|google news|story continues|click here|download|for more|stay updated|first published|updated:|last updated|published:|edited by|written by|by\s|photo:|image:|file photo|representational|catch all|get the latest|you may also like|related|tags?:|topics?:|disclaimer|©)(\b|\s|$)/i;
 function readerHtml(md, title) {
   const out = []; let words = 0; const seen = new Set();
   const lines = md.replace(/\r/g, '').split('\n');
@@ -331,7 +333,7 @@ function readerHtml(md, title) {
     if (h) { const t = h[1].trim(); if (t.length > 8 && t.length < 140 && words > 0 && t !== title && !READER_JUNK.test(t)) out.push(`<h3 class="rh">${esc(t)}</h3>`); continue; }
     const li = /^[-*•]\s+(.*)/.exec(ln);
     const text = (li ? li[1] : ln).replace(/^>\s*/, '').trim();
-    if (READER_JUNK.test(text) || text === title) continue;
+    if (READER_JUNK.test(text) || READER_BAD.test(text) || camelJunk(text) || text === title) continue;
     if (text.length < 60 && !/[.!?”"]$/.test(text)) continue; // menus, labels, link lists
     if ((text.match(/\|/g) || []).length > 2) continue;
     out.push(li ? `<p class="rp">• ${esc(text)}</p>` : `<p class="rp">${esc(text)}</p>`);
@@ -339,6 +341,37 @@ function readerHtml(md, title) {
     if (words > 2500) break;
   }
   return words > 60 ? out.join('') : '';
+}
+let ReadabilityMod = null;
+async function readable(url) {
+  const key = 'arth:' + url;
+  let html = null;
+  try { html = sessionStorage.getItem(key); } catch {}
+  if (!html) {
+    const r = await fetch('https://r.jina.ai/' + url, { headers: { 'X-Return-Format': 'html' } });
+    if (!r.ok) throw new Error('reader ' + r.status);
+    html = await r.text();
+    try { sessionStorage.setItem(key, html); } catch {}
+  }
+  ReadabilityMod ||= (await import('https://esm.sh/@mozilla/readability@0.5.0')).Readability;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const base = doc.createElement('base'); base.href = url; doc.head?.prepend(base);
+  const art = new ReadabilityMod(doc, { charThreshold: 300 }).parse();
+  if (!art?.content) return '';
+  const box = new DOMParser().parseFromString(art.content, 'text/html');
+  const out = []; let words = 0; const seen = new Set();
+  box.querySelectorAll('p, h2, h3, h4, li, blockquote').forEach((el) => {
+    if (el.closest('li') && el.tagName !== 'LI') return;
+    if (el.tagName === 'P' && el.closest('blockquote')) return;
+    const t = el.textContent.replace(/\s+/g, ' ').trim();
+    if (!t || seen.has(t) || READER_BAD.test(t) || READER_JUNK.test(t) || camelJunk(t)) return;
+    seen.add(t);
+    if (/^H[234]$/.test(el.tagName)) { if (t.length > 6 && t.length < 140 && words) out.push(`<h3 class="rh">${esc(t)}</h3>`); return; }
+    if (t.length < 40 && !/[.!?”"]$/.test(t)) return;
+    out.push(el.tagName === 'LI' ? `<p class="rp">• ${esc(t)}</p>` : el.tagName === 'BLOCKQUOTE' ? `<p class="rp" style="border-left:3px solid var(--accent);padding-left:12px;border-radius:0">${esc(t)}</p>` : `<p class="rp">${esc(t)}</p>`);
+    words += t.split(' ').length;
+  });
+  return words > 80 ? out.join('') : '';
 }
 async function loadArticle(url) {
   const key = 'art:' + url;
@@ -350,6 +383,10 @@ async function loadArticle(url) {
   try { sessionStorage.setItem(key, md); } catch {}
   return md;
 }
+async function articleHtml(url, title) {
+  try { const h = await readable(url); if (h) return h; } catch (e) { console.warn('readability', e); }
+  return readerHtml(await loadArticle(url), title);
+}
 function viewRead(id, srcIdx) {
   const s = S.byId[id]; if (!s) return `${backBar()}<div class="empty">This story is no longer in today’s feed.</div>`;
   markRead(id);
@@ -359,8 +396,7 @@ function viewRead(id, srcIdx) {
   setTimeout(async () => {
     const box = $('#rbody'); if (!box) return;
     try {
-      const md = await loadArticle(url);
-      const html = readerHtml(md, s.title);
+      const html = await articleHtml(url, s.title);
       if ($('#rbody') !== box) return;
       box.innerHTML = html || readerFallback(s, url, 'This site shows only part of its story outside its own page.');
     } catch (e) { if ($('#rbody') === box) box.innerHTML = readerFallback(s, url, 'Could not load the full article right now.'); }
@@ -379,7 +415,7 @@ function viewWeb(enc) {
   const url = decodeURIComponent(enc || '');
   setTimeout(async () => {
     const box = $('#rbody'); if (!box) return;
-    try { const md = await loadArticle(url); const t = (/^Title:\s*(.*)$/m.exec(md) || [])[1] || ''; const html = readerHtml(md, t); if ($('#rbody') === box) box.innerHTML = html || readerFallback({}, url, 'This page could not be shown in reading view.'); }
+    try { const html = await articleHtml(url, ''); if ($('#rbody') === box) box.innerHTML = html || readerFallback({}, url, 'This page could not be shown in reading view.'); }
     catch { if ($('#rbody') === box) box.innerHTML = readerFallback({}, url, 'Could not load this page right now.'); }
   }, 0);
   return `${backBar()}<span class="eyebrow mt8" style="display:block">${esc(domainName(url))}</span><div id="rbody" class="mt16"><div class="col gap8">${[100, 96, 98, 70, 100, 92].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div></div><p class="xs muted mt16" style="text-align:center"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--accent-text)">Open original page</a></p>`;
