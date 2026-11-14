@@ -1,5 +1,6 @@
 import { THOUGHTS, TIPS, GUIDE, LEARN } from './content.js';
 import { CALCS, inr, dur, monthsToGoal, sipForGoal, fvSip } from './grow.js';
+import { PLACES, COST, COST_HINT } from './todo.js';
 
 // ---------- small helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -65,6 +66,8 @@ const P = {
   heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
   trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+  ticket: '<path d="M4 7a2 2 0 0 0 2-2h12a2 2 0 0 0 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 0-2 2H6a2 2 0 0 0-2-2v-3a2 2 0 0 0 0-4z"/><path d="M10 5v14" stroke-dasharray="2 2"/>',
+  map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/>',
   sunrise: '<path d="M12 3v5M5 11l1.5 1.5M19 11l-1.5 1.5M3 18h18M7 18a5 5 0 0 1 10 0M9 6l3-3 3 3"/>'
 };
@@ -72,7 +75,7 @@ const ic = (n, s = 20, w = 1.8) => `<svg width="${s}" height="${s}" viewBox="0 0
 const logo = (s = 34) => `<svg width="${s}" height="${s}" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="30" fill="var(--card)" stroke="var(--line2)"/><path d="M60 26Q76 52 60 86Q44 52 60 26Z" fill="#FF7A1A"/><path d="M60 86Q30 80 22 52Q48 54 60 86Z" fill="none" stroke="var(--text)" stroke-width="5" stroke-linejoin="round"/><path d="M60 86Q90 80 98 52Q72 54 60 86Z" fill="none" stroke="var(--text)" stroke-width="5" stroke-linejoin="round"/><circle cx="60" cy="58" r="6" fill="var(--card)"/></svg>`;
 
 // ---------- state ----------
-const DEFAULT_SECTIONS = ['mumbai', 'india', 'world', 'markets', 'money', 'gold', 'knowledge', 'health', 'sports', 'gadgets', 'phones', 'bollywood', 'movies', 'viral', 'spiritual'];
+const DEFAULT_SECTIONS = ['mumbai', 'events', 'india', 'world', 'markets', 'money', 'gold', 'knowledge', 'health', 'sports', 'gadgets', 'phones', 'bollywood', 'movies', 'viral', 'spiritual'];
 const S = {
   news: null, markets: null, byId: {}, weather: null, loc: null,
   settings: Object.assign({ name: 'Mehul', theme: 'light', v: 2, sections: DEFAULT_SECTIONS, key: '', model: 'gemini-2.5-flash' }, LS.get('settings', {})),
@@ -80,6 +83,7 @@ const S = {
   chat: [], range: '1D', moneyTab: 'markets', lastRoute: '#home', installEvt: null
 };
 const saveSettings = () => LS.set('settings', S.settings);
+if ((S.settings.v || 1) < 3 && !S.settings.sections.includes('events')) { S.settings.sections.splice(1, 0, 'events'); S.settings.v = 3; LS.set('settings', S.settings); }
 if ((S.settings.v || 1) < 2) { for (const id of ['knowledge', 'sports']) if (!S.settings.sections.includes(id)) S.settings.sections.push(id); S.settings.sections = DEFAULT_SECTIONS.filter((x) => S.settings.sections.includes(x)); S.settings.v = 2; LS.set('settings', S.settings); }
 S.history = LS.get('history', []);
 const markRead = (id) => {
@@ -93,8 +97,8 @@ const DARK_THEMES = ['dark', 'midnight'];
 function applyTheme() { const d = document.documentElement; d.dataset.theme = S.settings.theme; d.dataset.mode = DARK_THEMES.includes(S.settings.theme) ? 'dark' : 'light'; d.dataset.accent = S.settings.accent || 'saffron'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(d).getPropertyValue('--bg').trim() || '#0D0E12'; }
 applyTheme();
 
-const HUES = { mumbai: 172, india: 30, world: 214, markets: 256, money: 282, gold: 44, knowledge: 226, health: 145, sports: 98, gadgets: 192, phones: 202, bollywood: 330, movies: 300, viral: 356, spiritual: 18 };
-const ICONS = { sports: 'trophy', knowledge: 'bulb' };
+const HUES = { events: 290, mumbai: 172, india: 30, world: 214, markets: 256, money: 282, gold: 44, knowledge: 226, health: 145, sports: 98, gadgets: 192, phones: 202, bollywood: 330, movies: 300, viral: 356, spiritual: 18 };
+const ICONS = { sports: 'trophy', knowledge: 'bulb', events: 'ticket' };
 function secColors(id) {
   const h = HUES[id] ?? 220; const light = document.documentElement.dataset.mode === 'light';
   return light ? { color: `hsl(${h} 78% 93%)`, tint: `hsl(${h} 62% 30%)`, solid: `hsl(${h} 62% 44%)` } : { color: `hsl(${h} 34% 17%)`, tint: `hsl(${h} 72% 76%)`, solid: `hsl(${h} 60% 55%)` };
@@ -215,12 +219,13 @@ function viewHome() {
   const top5 = []; for (const s of pool5) { if (top5.length >= 5) break; if (!S.read.has(s.id) && !top5.includes(s)) top5.push(s); }
   const q60 = unread(n.quick60.map((id) => S.byId[id]).filter(Boolean)).length;
   const upd = new Date(n.updated).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-  const topics = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="topic" href="#section/${id}" style="background:${m.color};color:${m.tint}">${ic(m.icon, 18, 2)}<span>${esc(m.short)}</span>${c ? `<em>${c}</em>` : ''}</a>`; }).join('');
+  const topics = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="topic" href="${id === 'events' ? '#todo' : '#section/' + id}" style="background:${m.color};color:${m.tint}">${ic(m.icon, 18, 2)}<span>${esc(m.short)}</span>${c ? `<em>${c}</em>` : ''}</a>`; }).join('');
   const th = THOUGHTS[dayIndex() % THOUGHTS.length];
   return `${top}
   <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${q60 ? 'Start your Quick 60' : 'Quick 60: all read'}</b><span class="small" style="opacity:.85">${q60 ? `${q60} stories · about ${Math.max(2, Math.round(q60 * 0.25))} min` : 'New stories arrive every 30 minutes'}</span></span>${ic('chev', 22, 2)}</a>
   <div class="sec-head"><span class="h2">Top 5 right now</span><button class="xs muted row gap4" data-act="refresh" aria-label="Refresh news">${upd} ${ic('refresh', 14)}</button></div>
   ${top5.length ? `<div class="card" style="padding:2px 14px">${top5.map((s, i) => `<a class="mk" href="#read/${s.id}"><span class="num">${i + 1}</span><div class="col gap4 grow"><span class="ttl">${esc(s.headline || s.title)}</span><span class="meta"><span style="color:${secMeta(s.section).solid};font-weight:600">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${s.n} sources</span>` : ''}${s.breaking && s.n >= 3 ? ' · <span class="badge b-live">Breaking</span>' : ''}</span></div></a>`).join('')}</div>` : `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up</div>`}
+  ${(() => { const p = todoPicks('all')[0]; if (!p) return ''; const m = secMeta('events'); return `<a class="card row gap12 mt16" href="#todo" style="background:${m.color};border-color:transparent"><span class="sdot" style="width:44px;height:44px;border-radius:14px;background:var(--card);color:${m.tint}">${ic('ticket', 22, 2)}</span><span class="col grow" style="gap:2px"><b style="color:${m.tint}">Today in Mumbai</b><span class="small" style="color:var(--text)">${esc(p.n)}${p.cost ? '' : ' · free'}</span><span class="xs muted">${todoInfo().label} · tap for more ideas and events</span></span>${ic('chev', 20, 2)}</a>`; })()}
   <div class="sec-head"><span class="h2">Browse by topic</span><a href="#explore">More</a></div>
   <div class="topics">${topics}</div>
   <div class="quote mt24"><span class="eyebrow" style="color:${secMeta('spiritual').solid}">${ic('lotus', 14)} Thought of the day</span><p>${esc(th[0])}</p><span class="small muted">— ${esc(th[1])}</span></div>
@@ -228,7 +233,7 @@ function viewHome() {
 }
 const header = () => `<div class="top"><div class="brand">${logo()}<b>Drishti</b></div><div class="row gap8"><button class="ibtn" data-act="refresh" aria-label="Refresh news" id="rfb">${ic('refresh')}</button><a class="ibtn" href="#search" aria-label="Search">${ic('search')}</a><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div></div>`;
 
-const FEED_TABS = [['all', 'My feed'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['knowledge', 'Knowledge'], ['markets', 'Markets'], ['money', 'SIP and MF'], ['gold', 'Gold'], ['health', 'Health'], ['sports', 'Sports'], ['gadgets', 'Tech'], ['phones', 'Phones'], ['bollywood', 'Bollywood'], ['movies', 'Movies'], ['viral', 'Viral'], ['spiritual', 'Spiritual']];
+const FEED_TABS = [['all', 'My feed'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['knowledge', 'Knowledge'], ['events', 'Things to do'], ['markets', 'Markets'], ['money', 'SIP and MF'], ['gold', 'Gold'], ['health', 'Health'], ['sports', 'Sports'], ['gadgets', 'Tech'], ['phones', 'Phones'], ['bollywood', 'Bollywood'], ['movies', 'Movies'], ['viral', 'Viral'], ['spiritual', 'Spiritual']];
 const hasBody = (s) => (s.summary || '').length > 90;
 function viewQuick(tab = 'all') {
   const n = S.news; if (!n) return `<div class="empty">Loading…</div>`;
@@ -270,7 +275,7 @@ function setupQuick(start, total, tab) {
   }), { root: w, threshold: [0.6] });
   w.querySelectorAll('.qcard').forEach((c) => io.observe(c));
 }
-const storyCard = (s) => { const m = secMeta(s.section); return `<article class="scard"><a href="#story/${s.id}" class="scimg">${img(s, 200, true)}<span class="qsrc" style="bottom:10px;left:10px">${avatars(s.sources, 1)}<span>${esc(s.sources[0]?.name || '')}</span></span></a><a href="#story/${s.id}" class="col gap6" style="padding:14px 16px 4px"><span class="sct">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="scs">${esc(s.summary)}</span>` : ''}</a><div class="row gap8" style="padding:6px 16px 14px;flex-wrap:wrap"><span class="xs muted">${ago(s.time)} ago</span>${verify(s)}${s.local ? '<span class="badge b-warn">Near you</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="#read/${s.id}">Read full story ${ic('chev', 12, 2)}</a></div></article>`; };
+const storyCard = (s) => { const m = secMeta(s.section); return `<article class="scard"><a href="#story/${s.id}" class="scimg">${img(s, 200, true)}<span class="qsrc" style="bottom:10px;left:10px">${avatars(s.sources, 1)}<span>${esc(s.sources[0]?.name || '')}</span></span></a><a href="#story/${s.id}" class="col gap6" style="padding:14px 16px 4px"><span class="sct">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="scs">${esc(s.summary)}</span>` : ''}</a><div class="row gap8" style="padding:6px 16px 14px;flex-wrap:wrap">${s.price ? `<span class="badge" style="background:var(--accent-soft);color:var(--accent-text)">${ic('ticket', 12, 2)} ${esc(s.price)}</span>` : ''}<span class="xs muted">${ago(s.time)} ago</span>${verify(s)}${s.local ? '<span class="badge b-warn">Near you</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="#read/${s.id}">Read full story ${ic('chev', 12, 2)}</a></div></article>`; };
 
 function viewStory(id) {
   const s = S.byId[id]; if (!s) return `${backBar()}<div class="empty">This story is no longer in today’s feed.</div>`;
@@ -303,7 +308,7 @@ function viewSection(id) {
 function viewExplore() {
   const n = S.news;
   const tile = (href, hue, icon, title, sub) => { const light = document.documentElement.dataset.mode === 'light'; const bg = light ? `hsl(${hue} 78% 93%)` : `hsl(${hue} 34% 17%)`; const ink = light ? `hsl(${hue} 62% 30%)` : `hsl(${hue} 72% 76%)`; return `<a class="stile" href="${href}" style="background:${bg}"><span class="ic" style="color:${ink}">${ic(icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(title)}</b><span class="xs" style="color:${ink}">${esc(sub)}</span></span></a>`; };
-  const tiles = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="stile" href="#section/${id}" style="background:${m.color}"><span class="ic" style="color:${m.tint}">${ic(m.icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(m.name)}</b><span class="xs" style="color:${m.tint}">${c} new</span></span></a>`; }).join('');
+  const tiles = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="stile" href="${id === 'events' ? '#todo' : '#section/' + id}" style="background:${m.color}"><span class="ic" style="color:${m.tint}">${ic(m.icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(m.name)}</b><span class="xs" style="color:${m.tint}">${c} new</span></span></a>`; }).join('');
   return `<div class="top"><h1 class="h1">Explore</h1><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div>
   <a class="search mt8" href="#search">${ic('search', 18)}<span class="muted">Search all news</span></a>
   <div class="sec-head"><span class="h2">Topics</span><span class="xs muted">${n?.stats?.ok || 0} trusted sources</span></div>
@@ -312,6 +317,45 @@ function viewExplore() {
   <div class="grid2">${tile('#history', 200, 'history', 'Read history', S.history.length + ' read')}${tile('#saved', 44, 'bookmark', 'Saved', S.saved.length + ' stories')}</div>
   <div class="sec-head"><span class="h2">Tools</span></div>
   <div class="grid2">${tile('#factchecks', 0, 'alert', 'Fake news busted', (n?.factChecks?.length || 0) + ' checks')}${tile('#grow', 270, 'target', 'Grow your money', 'Calculators and guides')}${n?.videos?.length ? tile('#videos', 356, 'play', 'Trending videos', 'YouTube India') : ''}${tile('#ask', 30, 'sparkle', 'Ask Drishti', 'AI answers')}</div>`;
+}
+function todoInfo() {
+  const d = new Date(); const day = d.getDay(); const h = d.getHours(); const weekend = day === 0 || day === 6;
+  const w = S.weather?.w; const rain = w ? Math.max(w.daily?.precipitation_probability_max?.[0] ?? 0, 0) >= 50 || [61, 63, 65, 80, 81, 82, 95, 96, 99].includes(w.current?.weather_code) : false;
+  const temp = w?.current ? Math.round(w.current.temperature_2m) : null;
+  const slot = h < 11 ? 'morning' : h < 16 ? 'day' : 'evening';
+  const label = [d.toLocaleDateString('en-IN', { weekday: 'long' }), temp != null ? temp + '°' : '', rain ? 'rain likely' : '', weekend ? 'weekend' : ''].filter(Boolean).join(' · ');
+  return { weekend, rain, slot, hot: temp != null && temp >= 33, label };
+}
+function todoPicks(who) {
+  const t = todoInfo(); const seed = dayIndex();
+  return PLACES.map((p, i) => {
+    let sc = 0;
+    if (who === 'free') sc += p.cost === 0 ? 4 : -9; else if (who !== 'all') sc += p.who.includes(who) ? 4 : -9;
+    if (p.when === t.slot || p.when === 'any') sc += 2; else if (t.slot === 'evening' && p.when === 'day') sc -= 2; else if (t.slot !== 'morning' && p.when === 'morning') sc -= 3;
+    if (t.rain) sc += p.indoor ? 4 : -6;
+    if (t.hot && !p.indoor && p.when === 'day') sc -= 2;
+    if (p.weekend) sc += t.weekend ? 2 : -5;
+    if (p.near) sc += 1.5;
+    sc += ((i * 7 + seed) % 10) / 10; // gentle daily rotation
+    return { ...p, sc };
+  }).filter((p) => p.sc > 0).sort((a, b) => b.sc - a.sc);
+}
+const placeCard = (p) => `<div class="card col gap6"><div class="row gap8" style="align-items:flex-start"><span class="col grow" style="gap:2px"><b style="font-size:16px">${esc(p.n)}</b><span class="xs muted">${ic('pin', 12, 2)} ${esc(p.a)}${p.near ? ' · near you' : ''}</span></span><span class="badge" style="background:${p.cost ? 'var(--accent-soft)' : 'var(--ok-bg)'};color:${p.cost ? 'var(--accent-text)' : 'var(--ok)'}" title="${COST_HINT[p.cost]}">${COST[p.cost]}</span></div><span class="small" style="color:var(--text2);line-height:1.55">${esc(p.d)}</span><div class="row gap6" style="flex-wrap:wrap">${p.who.map((w) => `<span class="chip" style="padding:3px 9px;font-size:11px">${w === 'kids' ? 'Kids' : w[0].toUpperCase() + w.slice(1)}</span>`).join('')}${p.indoor ? '<span class="chip" style="padding:3px 9px;font-size:11px">Indoor</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.n + ', ' + p.a + ', Mumbai')}" target="_blank" rel="noopener">${ic('map', 12, 2)} Directions</a></div></div>`;
+function viewTodo(who = 'all') {
+  const t = todoInfo(); const m = secMeta('events');
+  const picks = todoPicks(who).slice(0, 3);
+  const events = unread(secStories('events')).filter((s) => who === 'all' || (who === 'free' ? s.price === 'Free' : new RegExp({ kids: 'kid|child|family|young', family: 'family|kid|child', couple: 'couple|date|music|comedy|theatre|play|dinner|gig', solo: 'walk|talk|exhibition|workshop|art|gig|comedy|museum' }[who] || '.', 'i').test(s.title + ' ' + (s.summary || ''))));
+  const more = PLACES.filter((p) => (who === 'all' || (who === 'free' ? p.cost === 0 : p.who.includes(who))) && !picks.some((x) => x.n === p.n)).sort((a, b) => (b.near ? 1 : 0) - (a.near ? 1 : 0) || a.cost - b.cost);
+  const chips = [['all', 'All'], ['family', 'Family'], ['kids', 'Kids'], ['couple', 'Couple'], ['solo', 'Solo'], ['free', 'Free']].map(([id, l]) => `<a class="chip" href="#todo/${id}" style="${who === id ? `background:${m.color};color:${m.tint};border-color:transparent;font-weight:600` : ''}">${l}</a>`).join('');
+  return `${backBar()}<div class="row gap12 mt8"><span style="width:48px;height:48px;border-radius:14px;background:${m.color};color:${m.tint};display:flex;align-items:center;justify-content:center">${ic('ticket', 24)}</span><div class="col"><h1 class="h1" style="font-size:26px">Things to do in Mumbai</h1><span class="small muted">${esc(t.label)}</span></div></div>
+  <div class="row gap6 mt16" style="flex-wrap:wrap">${chips}</div>
+  <div class="sec-head"><span class="h2">Today’s picks</span><span class="xs muted">${t.rain ? 'Indoor ideas, rain likely' : t.slot === 'evening' ? 'For this evening' : t.slot === 'morning' ? 'For this morning' : 'For today'}</span></div>
+  <div class="col gap12">${picks.length ? picks.map(placeCard).join('') : '<div class="empty">No matching ideas right now.</div>'}</div>
+  <div class="sec-head"><span class="h2">Happening this week</span><span class="xs muted">from Mid-day, HT, Time Out and more</span></div>
+  ${events.length ? `<div class="col gap16">${events.slice(0, 12).map(storyCard).join('')}</div>` : `<div class="card small muted">No new event listings ${who === 'all' ? '' : 'for this filter '}right now. They refresh every 30 minutes.</div>`}
+  <div class="sec-head"><span class="h2">More ideas</span><span class="xs muted">${COST_HINT.map((h, i) => COST[i] + ' ' + h).slice(1).join(' · ')}</span></div>
+  <div class="col gap12">${more.map(placeCard).join('')}</div>
+  <p class="note">Costs are rough per-person guides. Timings, fees and closing days change, so check before you go.</p>`;
 }
 function viewHistory() {
   const h = S.history;
@@ -681,7 +725,7 @@ function render() {
   const [r, a] = route(); const v = $('#view');
   const map = { history: viewHistory, home: viewHome, quick: viewQuick, money: viewMoney, grow: viewGrow, ask: viewAsk, explore: viewExplore, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide };
   let html;
-  if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read') html = viewRead(a, route()[2] != null ? Number(route()[2]) : null); else if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
+  if (r === 'todo' || (r === 'section' && a === 'events')) html = viewTodo(r === 'todo' ? (a || 'all') : 'all'); else if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read') html = viewRead(a, route()[2] != null ? Number(route()[2]) : null); else if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
   const tab = r === 'read' || r === 'web' ? S.lastTab : { home: 'home', quick: 'quick', money: 'money', grow: 'money', calc: 'money', guide: 'money', learn: 'money', ask: 'ask' }[r] || (r === 'story' ? S.lastTab : 'explore');
   if (!['story', 'read', 'web'].includes(r)) S.lastTab = tab;
   v.className = r === 'quick' ? 'full' : '';

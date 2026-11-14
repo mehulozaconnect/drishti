@@ -197,7 +197,8 @@ const FASHION = /\b(fashion|style|stylish|outfit|look|looks|dressed|designer|red
 const FEED_TRUSTED_TOPIC = new Set(['sports', 'markets', 'money']);
 const FILM = /\b(film|films|movie|movies|cinema|ott|box office|trailer|teaser|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|actor|actress|director|series|bollywood|tollywood|kollywood|movie review|film review|starrer|biopic|sequel|bigg boss|iffi|ramayana)\b/i;
 KW.spiritual = /\b(temple|puja|pooja|spiritual|devotees?|pilgrims?|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|kharna|prasad|katha|nahay)\b/i;
-const TOPICAL = new Set(['markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
+KW.events = /\b(things to do|weekend|events?|concerts?|gigs?|live music|exhibitions?|art show|workshops?|stand-?up|comedy|play|plays|theatre|theater|screening|fair|flea|pop-?up|food festival|festival|marathon|heritage walk|walk|trek|kids|family|tickets?|book now|free entry|entry fee|venue|nesco|ncpa|prithvi|jio world|dome|bkc)\b/i;
+const TOPICAL = new Set(['events', 'markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
 function chooseSection(c) {
   const text = c.items.map((i) => i.title).join(' . ');
@@ -214,6 +215,7 @@ function chooseSection(c) {
     if (id === 'india') ok = true;
     else if (id === 'knowledge' || id === 'spiritual') ok = sec.require.test(titles);
     else if (id === 'mumbai') ok = hits > 0;
+    else if (id === 'events') ok = hits > 0 && KW.mumbai.test(titles) && !political && (votes.events || 0) >= 1;
     else if (id === 'world') ok = hits > 0 && !KW.mumbai.test(titles);
     else if (political && !['markets', 'money', 'sports', 'gold'].includes(id)) ok = false; // politics and crime are news, not lifestyle or tech
     else if (id === 'movies' && !FILM.test(titles)) ok = false;
@@ -343,6 +345,14 @@ function stripTitle(sum, title) {
   return sum.trim();
 }
 const COMMENTS = /(newscomm|\/comments?\/|#comments|comment\.php|\/forum|\/reviews?comm)/i;
+// find a ticket price or free entry in event articles
+function priceOf(text) {
+  if (/\b(free entry|entry is free|free of cost|free admission|no entry fee|free for all)\b/i.test(text)) return 'Free';
+  const m = [...text.matchAll(/(?:₹|rs\.?|inr)\s?([\d,]{2,7})(?:\s?(?:\/-)?\s?(onwards|per person|per head|upwards))?/gi)].map((x) => ({ v: Number(x[1].replace(/,/g, '')), on: x[2] })).filter((x) => x.v >= 50 && x.v <= 50000);
+  if (!m.length) return '';
+  const min = Math.min(...m.map((x) => x.v));
+  return '₹' + min.toLocaleString('en-IN') + (m.length > 1 || m[0].on ? ' onwards' : '');
+}
 async function pool(items, n, fn) { const q = [...items]; await Promise.all(Array.from({ length: n }, async () => { while (q.length) await fn(q.shift()); })); }
 
 async function enrich(stories, cache) {
@@ -358,7 +368,7 @@ async function enrich(stories, cache) {
         const a = extractArticle(await fetchText(u, 10000, { Accept: 'text/html' }));
         if (a.image && !c.img) c.img = a.image;
         if (a.ogd && !c.ogd) c.ogd = a.ogd;
-        if (a.text.length > 150) { c.text = a.text; c.url = u; ok++; return true; }
+        if (a.text.length > 150) { c.text = a.text; c.url = u; c.price = priceOf(a.text); ok++; return true; }
       } catch { /* blocked or slow */ }
       return false;
     };
@@ -376,6 +386,7 @@ async function enrich(stories, cache) {
     const c = cache[s.id]; if (!c) continue;
     if (c.url) { s.link = c.url; if (s.sources[0]) s.sources[0].url = s.sources[0].url.includes('news.google.com') ? c.url : s.sources[0].url; }
     if (!s.image && c.img) s.image = c.img;
+    if (s.section === 'events' && c.price) s.price = c.price;
     s.body = c.text || '';
     if (!s.desc && c.ogd && c.ogd.length > 60) s.desc = c.ogd;
   }
@@ -498,7 +509,7 @@ async function main() {
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
     const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i) => ({ ...i, origin: sec.id, google: u.includes('news.google.com') }))));
-    const maxAge = sec.id === 'knowledge' ? 168 : (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
+    const maxAge = sec.id === 'knowledge' || sec.id === 'events' ? 168 : (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
     return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title) && (!sec.exclude || !sec.exclude.test(i.title)));
   }));
   const checkItems = (await Promise.all(FACTCHECK_FEEDS.map(loadFeed))).flat().filter((i) => NOW - i.time < 7 * 864e5);

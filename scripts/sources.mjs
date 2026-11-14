@@ -77,7 +77,15 @@ export const TRUSTED = {
   'healthshots.com': 'HealthShots',
   'vogue.in': 'Vogue India',
   'gqindia.com': 'GQ India',
-  'lifestyleasia.com': 'Lifestyle Asia'
+  'lifestyleasia.com': 'Lifestyle Asia',
+  'timeout.com': 'Time Out',
+  'lbb.in': 'LBB',
+  'district.in': 'District',
+  'insider.in': 'Insider',
+  'bookmyshow.com': 'BookMyShow',
+  'mumbaimirror.indiatimes.com': 'Mumbai Mirror',
+  'cntraveller.in': 'Condé Nast Traveller India',
+  'lokmat.com': 'Lokmat'
 };
 
 const g = (q) => `https://news.google.com/rss/search?q=${encodeURIComponent(q + ' when:2d')}&hl=en-IN&gl=IN&ceid=IN:en`;
@@ -261,6 +269,23 @@ export const SECTIONS = [
       g('site:theprint.in explained OR ThePrint explainer'),
       g('why OR how explained science history economy'),
       'https://www.vox.com/rss/explainers/index.xml',
+    ]
+  },
+  {
+    id: 'events', name: 'Things to do in Mumbai', short: 'Things to do', color: '#2B1F3D', tint: '#E2C6FF', icon: 'ticket', weight: 0.7,
+    feeds: [
+      g('things to do in Mumbai this weekend'),
+      g('Mumbai weekend events'),
+      g('Mumbai events this week tickets'),
+      g('Mumbai concert OR gig OR live music'),
+      g('Mumbai exhibition OR art show OR museum'),
+      g('Mumbai kids activities OR workshop OR children'),
+      g('Mumbai stand-up comedy show OR play theatre'),
+      g('Mumbai food festival OR flea market OR pop-up'),
+      g('site:mid-day.com things to do Mumbai'),
+      g('site:hindustantimes.com Mumbai weekend'),
+      g('site:timeout.com Mumbai'),
+      g('site:lbb.in Mumbai')
     ]
   },
   {
