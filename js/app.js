@@ -199,42 +199,30 @@ function viewHome() {
   const n = S.news; const w = S.weather; const q = S.markets?.quotes || {};
   const hr = new Date().getHours(); const greet = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
   const date = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
-  let weather = `<button class="weather" data-act="weather"><div class="skel" style="width:60px;height:40px"></div><div class="col grow gap4"><div class="skel" style="height:14px;width:60%"></div><div class="skel" style="height:12px;width:40%"></div></div></button>`;
+  // one compact line for weather and air
+  let wx = `<span class="chip skel" style="width:170px;height:34px"></span>`;
   if (w?.w?.current) {
-    const c = w.w.current, d = w.w.daily; const [lab, icn] = WMO(c.weather_code, c.is_day);
-    weather = `<button class="weather" data-act="weather"><span style="color:var(--accent-text)">${ic(icn, 36, 1.6)}</span><div class="col"><span class="t">${Math.round(c.temperature_2m)}°</span></div><div class="col grow" style="gap:1px"><span style="font-weight:600;font-size:14px" class="row gap4">${ic('pin', 14, 2)}${esc(w.loc.name)}${w.loc.fallback ? ' <span class="xs muted">(allow location)</span>' : ''}</span><span class="small muted">${lab} · H ${Math.round(d.temperature_2m_max[0])}° L ${Math.round(d.temperature_2m_min[0])}°${(d.precipitation_probability_max[0] ?? 0) >= 30 ? ` · <span style="color:#5BA4F5">Rain likely ${d.precipitation_probability_max[0]}%</span>` : ''}</span>${w.aqi != null ? `<span class="xs" style="color:${aqiColor(w.aqi)}">AQI ${w.aqi} · ${aqiLabel(w.aqi)}</span>` : ''}</div>${ic('chev', 18)}</button>`;
+    const c = w.w.current, d = w.w.daily; const [lab, icn] = WMO(c.weather_code, c.is_day); const rain = d.precipitation_probability_max[0] ?? 0;
+    wx = `<button class="chip wxchip" data-act="weather">${ic(icn, 16, 2)}<b>${Math.round(c.temperature_2m)}°</b>${esc(w.loc.name)}</button>${w.aqi != null ? `<button class="chip wxchip" data-act="weather" style="color:${aqiColor(w.aqi)}">AQI ${w.aqi} · ${aqiLabel(w.aqi)}</button>` : ''}${rain >= 30 ? `<button class="chip wxchip" data-act="weather" style="color:#3B82C4">${ic('rain', 14, 2)}${rain}%</button>` : ''}`;
   }
-  const tick = [['nifty', 'Nifty 50'], ['sensex', 'Sensex'], ['gold', 'Gold 24K · 10g'], ['silver', 'Silver · 1kg'], ['usdinr', 'USD / INR'], ['brent', 'Brent crude']].filter(([k]) => q[k]).map(([k, l]) => { const x = q[k]; const rupee = k === 'gold' || k === 'silver'; return `<a class="tile" href="#money"><span class="xs muted">${l}</span><span class="v">${rupee ? '₹' + Math.round(x.price).toLocaleString('en-IN') : k === 'brent' ? '$' + num(x.price) : num(x.price, k === 'usdinr' ? 2 : 0)}</span><div class="row sp"><span class="xs ${x.pct >= 0 ? 'up' : 'down'}">${pct(x.pct)}</span>${x.spark?.length > 3 ? `<span style="width:52px;height:18px;display:block">${spark(x.spark, 52, 18, x.pct >= 0 ? 'var(--up)' : 'var(--down)', false)}</span>` : ''}</div></a>`; }).join('');
-  if (!n) return `${header()}<div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div>${weather}<div class="empty mt24">Fetching today’s news…</div>`;
-  const shown = new Set(); const take = (list, k) => { const out = []; for (const s of list) { if (out.length >= k) break; if (shown.has(s.id) || S.read.has(s.id)) continue; shown.add(s.id); out.push(s); } return out; };
-  const fresh = n.stories.filter((s) => Date.now() - s.time < 4 * 3.6e6 && (s.n >= 2 || s.score > 1.5)).sort((a, b) => b.time - a.time);
-  const latest = take(fresh, 4);
-  const mustAll = n.mustKnow.map((id) => S.byId[id]).filter(Boolean);
-  const must = take(mustAll, 10); const mustRead = mustAll.filter((s) => S.read.has(s.id)).length;
-  const hero = take(n.stories.filter((s) => s.image && s.summary).sort((a, b) => b.score - a.score), 1)[0];
-  const q60 = n.quick60.filter((id) => !S.read.has(id)).length;
-  const fcs = (n.factChecks || []).slice(0, 2);
-  const th = THOUGHTS[dayIndex() % THOUGHTS.length]; const tp = TIPS[dayIndex() % TIPS.length];
-  const forYou = S.settings.sections.map((id) => {
-    const list = take(secStories(id), 3); if (!list.length) return ''; const m = secMeta(id);
-    return `<div class="sec-head"><a class="h2 row gap8" href="#section/${id}" style="color:var(--text)"><span class="sdot" style="background:${m.color};color:${m.tint}">${ic(m.icon, 16, 2)}</span>${esc(m.name)}</a><a href="#section/${id}">See all</a></div><div>${list[0].summary && list[0].image ? storyCard(list[0]) + list.slice(1).map(storyRow).join('') : list.map(storyRow).join('')}</div>`;
-  }).join('');
+  const mk = [['nifty', 'Nifty'], ['sensex', 'Sensex'], ['gold', 'Gold 10g']].filter(([k]) => q[k]).map(([k, l]) => { const x = q[k]; return `<a class="mini" href="#money"><span class="xs muted">${l}</span><b>${k === 'gold' ? '₹' + Math.round(x.price).toLocaleString('en-IN') : num(x.price, 0)}</b><span class="xs ${x.pct >= 0 ? 'up' : 'down'}">${pct(x.pct)}</span></a>`; }).join('');
+  const top = `${header()}<div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div><div class="row gap8 mt12" style="flex-wrap:wrap">${wx}</div>${mk ? `<div class="minis mt12">${mk}</div>` : ''}`;
+  if (!n) return `${top}<div class="empty mt24">Fetching today’s news…</div>`;
+  // top 5: must-know first, then the freshest well-confirmed stories; unread only
+  const pool5 = [...n.mustKnow.map((id) => S.byId[id]).filter(Boolean), ...n.stories.filter((s) => s.n >= 2).sort((a, b) => b.score - a.score)];
+  const top5 = []; for (const s of pool5) { if (top5.length >= 5) break; if (!S.read.has(s.id) && !top5.includes(s)) top5.push(s); }
+  const q60 = unread(n.quick60.map((id) => S.byId[id]).filter(Boolean)).length;
   const upd = new Date(n.updated).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-  return `${header()}
-  <div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div>
-  ${weather}
-  ${tick ? `<div class="ticker hscroll">${tick}</div>` : ''}
-  ${latest.length ? `<div class="live mt16"><div class="row sp"><span class="row gap8" style="font-weight:700"><span class="pulse"></span>Latest updates</span><button class="xs muted row gap4" data-act="refresh" aria-label="Refresh news">Updated ${upd} ${ic('refresh', 14)}</button></div>${latest.map((s) => `<a class="lrow" href="#read/${s.id}"><span class="ltime">${new Date(s.time).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span><span class="col grow" style="gap:2px"><span class="lttl">${s.breaking && s.n >= 3 ? '<span class="badge b-live" style="margin-right:6px">Breaking</span>' : ''}${esc(s.headline || s.title)}</span><span class="xs muted">${esc(secMeta(s.section).short)} · ${esc(s.sources[0]?.name || '')}${s.n > 1 ? ` · <span style="color:var(--ok)">${s.n} sources</span>` : ''}</span></span></a>`).join('')}</div>` : ''}
-  <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${q60 ? 'Quick 60 is ready' : 'Quick 60: all read'}</b><span class="small" style="opacity:.85">${q60 ? `${q60} unread stories in 60 words · about ${Math.max(2, Math.round(q60 * 0.25))} min` : 'Pick any section tab for more'}</span></span>${ic('chev', 22, 2)}</a>
-  <div class="sec-head"><span class="h2">Must know today</span>${mustRead ? `<a href="#history">${mustRead} read ${ic('chev', 12, 2)}</a>` : ''}</div>
-  ${must.length ? `<div class="card" style="padding:4px 14px">${must.map((s, i) => `<a class="mk" href="#read/${s.id}"><span class="num">${i + 1}</span><div class="col gap4 grow"><span class="ttl">${esc(s.headline || s.title)}</span><span class="meta"><span style="color:${secMeta(s.section).solid}">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)} · ${s.n > 1 ? `<span style="color:var(--ok)">${s.n} sources</span>` : esc(s.sources[0]?.name)}</span></div></a>`).join('')}</div>` : `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up on today’s top stories</div>`}
-  ${hero ? `<div class="sec-head"><span class="h2">Top story</span></div>${storyCard(hero)}` : ''}
-  ${fcs.length ? `<div class="sec-head"><span class="h2">Fake news busted</span><a href="#factchecks">See all</a></div>${fcs.map((f) => `<a class="fc mt8" href="#web/${encodeURIComponent(f.link)}">${ic('alert', 18, 2)}<span class="col"><span>${esc(f.title)}</span><span class="xs" style="opacity:.8">${esc(f.publisher)} · ${ago(f.time)}</span></span></a>`).join('')}` : ''}
-  ${forYou}
-  <div class="sec-head"><span class="h2">For your day</span></div>
-  <div class="quote"><span class="eyebrow" style="color:${secMeta('spiritual').solid}">${ic('lotus', 14)} Thought of the day</span><p>${esc(th[0])}</p><span class="small muted">— ${esc(th[1])}</span></div>
-  <div class="quote mt12"><span class="eyebrow" style="color:var(--ok)">${ic('heart', 14)} Self-care tip</span><p style="font-size:17px">${esc(tp[0])}</p><span class="small muted">${esc(tp[1])}</span></div>
-  <div class="updated">News updated at ${upd} · refreshes every 30 minutes<br>${n.stats?.ok || 0} trusted feeds checked · <a href="#history" style="color:var(--accent-text)">Read history</a></div>`;
+  const topics = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="topic" href="#section/${id}" style="background:${m.color};color:${m.tint}">${ic(m.icon, 18, 2)}<span>${esc(m.short)}</span>${c ? `<em>${c}</em>` : ''}</a>`; }).join('');
+  const th = THOUGHTS[dayIndex() % THOUGHTS.length];
+  return `${top}
+  <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${q60 ? 'Start your Quick 60' : 'Quick 60: all read'}</b><span class="small" style="opacity:.85">${q60 ? `${q60} stories · about ${Math.max(2, Math.round(q60 * 0.25))} min` : 'New stories arrive every 30 minutes'}</span></span>${ic('chev', 22, 2)}</a>
+  <div class="sec-head"><span class="h2">Top 5 right now</span><button class="xs muted row gap4" data-act="refresh" aria-label="Refresh news">${upd} ${ic('refresh', 14)}</button></div>
+  ${top5.length ? `<div class="card" style="padding:2px 14px">${top5.map((s, i) => `<a class="mk" href="#read/${s.id}"><span class="num">${i + 1}</span><div class="col gap4 grow"><span class="ttl">${esc(s.headline || s.title)}</span><span class="meta"><span style="color:${secMeta(s.section).solid};font-weight:600">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${s.n} sources</span>` : ''}${s.breaking && s.n >= 3 ? ' · <span class="badge b-live">Breaking</span>' : ''}</span></div></a>`).join('')}</div>` : `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up</div>`}
+  <div class="sec-head"><span class="h2">Browse by topic</span><a href="#explore">More</a></div>
+  <div class="topics">${topics}</div>
+  <div class="quote mt24"><span class="eyebrow" style="color:${secMeta('spiritual').solid}">${ic('lotus', 14)} Thought of the day</span><p>${esc(th[0])}</p><span class="small muted">— ${esc(th[1])}</span></div>
+  <div class="updated">Updated ${upd} · refreshes every 30 minutes · <a href="#history" style="color:var(--accent-text)">Read history</a></div>`;
 }
 const header = () => `<div class="top"><div class="brand">${logo()}<b>Drishti</b></div><div class="row gap8"><button class="ibtn" data-act="refresh" aria-label="Refresh news" id="rfb">${ic('refresh')}</button><a class="ibtn" href="#search" aria-label="Search">${ic('search')}</a><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div></div>`;
 
@@ -316,15 +304,12 @@ function viewExplore() {
   const tiles = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="stile" href="#section/${id}" style="background:${m.color}"><span class="ic" style="color:${m.tint}">${ic(m.icon, 20)}</span><span class="col" style="gap:2px"><b>${esc(m.name)}</b><span class="xs" style="color:${m.tint}">${c} new</span></span></a>`; }).join('');
   return `<div class="top"><h1 class="h1">Explore</h1><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div>
   <a class="search mt8" href="#search">${ic('search', 18)}<span class="muted">Search all news</span></a>
-  <div class="trust mt12"><span style="width:38px;height:38px;border-radius:12px;background:var(--bg);color:var(--ok);display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic('shield', 20, 2)}</span><span class="col"><span style="font-weight:600;font-size:14px;color:var(--ok)">Only trusted sources</span><span class="xs muted">${n?.stats?.ok || 0} feeds from established publishers, cross-checked every 30 minutes, with fact-check flags on viral claims.</span></span></div>
-  <div class="grid2 mt16">
-    ${tile('#history', 200, 'history', 'Read history', S.history.length + ' read')}
-    ${tile('#saved', 44, 'bookmark', 'Saved', S.saved.length + ' stories')}
-    ${tiles}
-    ${tile('#factchecks', 0, 'alert', 'Fake news busted', (n?.factChecks?.length || 0) + ' checks')}
-    ${n?.videos?.length ? tile('#videos', 356, 'play', 'Trending videos', 'YouTube India') : ''}
-    ${tile('#grow', 270, 'target', 'Grow your money', 'Guides and calculators')}
-  </div>`;
+  <div class="sec-head"><span class="h2">Topics</span><span class="xs muted">${n?.stats?.ok || 0} trusted sources</span></div>
+  <div class="grid2">${tiles}</div>
+  <div class="sec-head"><span class="h2">Your stuff</span></div>
+  <div class="grid2">${tile('#history', 200, 'history', 'Read history', S.history.length + ' read')}${tile('#saved', 44, 'bookmark', 'Saved', S.saved.length + ' stories')}</div>
+  <div class="sec-head"><span class="h2">Tools</span></div>
+  <div class="grid2">${tile('#factchecks', 0, 'alert', 'Fake news busted', (n?.factChecks?.length || 0) + ' checks')}${tile('#grow', 270, 'target', 'Grow your money', 'Calculators and guides')}${n?.videos?.length ? tile('#videos', 356, 'play', 'Trending videos', 'YouTube India') : ''}${tile('#ask', 30, 'sparkle', 'Ask Drishti', 'AI answers')}</div>`;
 }
 function viewHistory() {
   const h = S.history;

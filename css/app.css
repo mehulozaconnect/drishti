@@ -230,3 +230,14 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 .lttl{font-weight:600;font-size:15px;line-height:1.35}
 .sdot{width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center}
 .spin svg{animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+
+/* calm home */
+.wxchip{height:34px;font-size:13px;color:var(--text);gap:6px}
+.wxchip b{font-weight:700}
+.minis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mini{display:flex;flex-direction:column;gap:1px;padding:10px 12px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
+.mini b{font-size:15px;font-weight:700}
+.topics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.topic{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:12px;border-radius:16px;font-size:13px;font-weight:600;position:relative;min-height:74px}
+.topic em{position:absolute;top:10px;right:10px;font-style:normal;font-size:11px;font-weight:700;opacity:.8}
+.stile{height:104px}
