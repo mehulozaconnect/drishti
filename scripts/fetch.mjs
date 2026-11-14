@@ -208,7 +208,8 @@ function chooseSection(c) {
   const votes = {};
   for (const i of c.items) votes[i.origin] = (votes[i.origin] || 0) + (i.google ? 1 : 3);
   // event listings found by the events searches go straight to Things to do
-  if ((votes.events || 0) >= 1 && !POLITICAL.test(titles) && !INCIDENT.test(titles) && KW.events.test(titles) && KW.mumbai.test(titles)) return SEC_BY_ID.events;
+  const evTitles = tl.filter((t) => KW.events.test(t) && KW.mumbai.test(t)).length;
+  if ((votes.events || 0) >= 1 && evTitles >= Math.ceil(tl.length / 2) && !POLITICAL.test(titles) && !INCIDENT.test(titles)) return SEC_BY_ID.events;
   let best = null, bestScore = -1, strongTopic = null, strongScore = -1;
   for (const sec of SECTIONS) {
     const id = sec.id;
@@ -325,7 +326,7 @@ function extractArticle(html) {
       if (t.length > 200 && dots >= t.length / 400) { text = t; break; }
     }
   }
-  return { image, ogd, text: text.slice(0, 1800) };
+  return { image, ogd, text: text.slice(0, 1800), full: clean(bodyHtml).slice(0, 30000) };
 }
 function extractive(text, fallback) {
   const src = (text && text.length > 150 ? text : fallback || '').replace(/\s+/g, ' ').replace(/^[A-Z][A-Za-z .]{2,30}:\s/, '').trim();
@@ -371,7 +372,7 @@ async function enrich(stories, cache) {
         const a = extractArticle(await fetchText(u, 10000, { Accept: 'text/html' }));
         if (a.image && !c.img) c.img = a.image;
         if (a.ogd && !c.ogd) c.ogd = a.ogd;
-        if (a.text.length > 150) { c.text = a.text; c.url = u; c.price = priceOf(a.text); ok++; return true; }
+        if (a.text.length > 150) { c.text = a.text; c.url = u; c.price = priceOf(a.full || a.text); ok++; return true; }
       } catch { /* blocked or slow */ }
       return false;
     };
