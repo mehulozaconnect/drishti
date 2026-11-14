@@ -266,7 +266,7 @@ export const SECTIONS = [
   {
     id: 'spiritual', name: 'Spiritual', short: 'Spiritual', color: '#3D2410', tint: '#FFC48A', icon: 'lotus', weight: 0.6,
     require: /(temple|puja|pooja|festival|spiritual|devotee|pilgrim|prayer|aarti|ganesh|ganpati|diwali|navratri|chhath|eid|ramzan|christmas|gurpurab|guru nanak|jain|buddh|yoga|meditation|saint|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|religio|church|mosque|gurudwara|darshan|bhagavad|gita|kumbh|tirupati|shirdi)/i,
-    exclude: /(betting|app case|cbi|arrest|scam|fraud|ed raid|police)/i,
+    exclude: /(betting|app case|cbi|arrest|scam|fraud|ed raid|police|bjp|congress|shiv sena|mns|thackeray|politic|row over|alleg|mishap|accident|killed|dies|death|wedding|traffic|actor|actress|box office)/i,
     feeds: [
       g('spiritual India'),
       g('site:freepressjournal.in spiritual OR festival OR temple'),
