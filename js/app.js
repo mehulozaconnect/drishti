@@ -98,7 +98,7 @@ function secColors(id) {
   return light ? { color: `hsl(${h} 78% 93%)`, tint: `hsl(${h} 62% 30%)`, solid: `hsl(${h} 62% 44%)` } : { color: `hsl(${h} 34% 17%)`, tint: `hsl(${h} 72% 76%)`, solid: `hsl(${h} 60% 55%)` };
 }
 const secMeta = (id) => { const base = (S.news?.sections || []).find((s) => s.id === id) || { id, name: id, short: id, icon: ICONS[id] || 'globe' }; return { ...base, icon: ICONS[id] || base.icon, ...secColors(id) }; };
-const inSection = (s, id) => s.section === id || (s.also || []).includes(id);
+const inSection = (s, id) => s.section === id; // each story lives in one section only
 const secStories = (id) => (S.news?.stories || []).filter((s) => inSection(s, id)).sort((a, b) => b.score - a.score);
 
 // ---------- data ----------

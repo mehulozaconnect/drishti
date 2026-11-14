@@ -460,7 +460,7 @@ async function main() {
   const kept = [];
   for (const s of all) {
     const tk = tokens(s.title);
-    const dup = kept.find((k) => similar(tokens(k.title), tk) >= 0.45);
+    const dup = kept.find((k) => similar(tokens(k.title), tk) >= 0.6);
     if (dup) { for (const p of s.sources) if (!dup.sources.some((x) => x.name === p.name)) dup.sources.push(p); dup.n = dup.sources.length; (dup.also ||= []).includes(s.section) || dup.also.push(s.section); if (!dup.image && s.image) dup.image = s.image; continue; }
     kept.push(s);
   }
