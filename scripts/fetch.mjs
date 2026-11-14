@@ -87,7 +87,7 @@ function similar(a, b) {
   const ov = inter / Math.min(wa, wb);
   return Math.max(j, ov * 0.7);
 }
-const JUNK = /^watch:|^video:|\bin pictures\b|^in photos|\| watch$|: watch$|\bnull\b|aum\(rs cr\)|^quarterly results of companies$|^tariffs and global trade$|diary: saturday dossier|^[^:]{0,40}(news|updates)$|\b\d+\+? (happy )?[\w' ]{0,30}(messages|wishes|greetings|quotes)\b|(wishes|messages|greetings|quotes|status)\b.{0,30}\b(wishes|messages|greetings|quotes|status)\b|e-?paper|news brief|morning brief|evening brief|news wrap|top headlines|headlines today|news highlights|live updates:|^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
+const JUNK = /^\d{1,2} \w+,? \d{4}$|^\w+ \d{1,2},? \d{4}$|^watch:|^video:|\bin pictures\b|^in photos|\| watch$|: watch$|\bnull\b|aum\(rs cr\)|^quarterly results of companies$|^tariffs and global trade$|diary: saturday dossier|^[^:]{0,40}(news|updates)$|\b\d+\+? (happy )?[\w' ]{0,30}(messages|wishes|greetings|quotes)\b|(wishes|messages|greetings|quotes|status)\b.{0,30}\b(wishes|messages|greetings|quotes|status)\b|e-?paper|news brief|morning brief|evening brief|news wrap|top headlines|headlines today|news highlights|live updates:|^explained\s.*\bnews\b|latest news, |court rulings & new laws|wishes,? (messages|quotes)|messages,? quotes|images and greetings|shayari|(price|rate|rates) today in (?!mumbai|india)[a-z]|check latest (petrol|diesel|gold|silver)|horoscope|rashifal|lottery|result live|live score|quiz:|crossword|wordle|today's (date|wordle)/i;
 const words = (s, n) => { const w = s.split(/\s+/); return w.length <= n ? s : w.slice(0, n).join(' ').replace(/[,;:]$/, '') + '…'; };
 const hash = (s) => createHash('sha1').update(s).digest('hex').slice(0, 12);
 
@@ -198,6 +198,7 @@ const FEED_TRUSTED_TOPIC = new Set(['sports', 'markets', 'money']);
 const FILM = /\b(film|films|movie|movies|cinema|ott|box office|trailer|teaser|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|actor|actress|director|series|bollywood|tollywood|kollywood|movie review|film review|starrer|biopic|sequel|bigg boss|iffi|ramayana)\b/i;
 KW.spiritual = /\b(temple|puja|pooja|spiritual|devotees?|pilgrims?|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|kharna|prasad|katha|nahay)\b/i;
 KW.events = /\b(things to do|weekend|events?|concerts?|gigs?|live music|exhibitions?|art show|workshops?|stand-?up|comedy|play|plays|theatre|theater|screening|fair|flea|pop-?up|food festival|festival|marathon|heritage walk|walk|trek|kids|family|tickets?|book now|free entry|entry fee|venue|nesco|ncpa|prithvi|jio world|dome|bkc)\b/i;
+const INCIDENT = /\b(fire|fires|blaze|accident|collapse|killed|dead|dies|death|injured|police|arrest|incident|stampede|crash|brigade|rescue)\b/i;
 const TOPICAL = new Set(['events', 'markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
 function chooseSection(c) {
@@ -207,7 +208,7 @@ function chooseSection(c) {
   const votes = {};
   for (const i of c.items) votes[i.origin] = (votes[i.origin] || 0) + (i.google ? 1 : 3);
   // event listings found by the events searches go straight to Things to do
-  if ((votes.events || 0) >= 1 && !political && KW.events.test(titles) && KW.mumbai.test(titles)) return SEC_BY_ID.events;
+  if ((votes.events || 0) >= 1 && !POLITICAL.test(titles) && !INCIDENT.test(titles) && KW.events.test(titles) && KW.mumbai.test(titles)) return SEC_BY_ID.events;
   let best = null, bestScore = -1, strongTopic = null, strongScore = -1;
   for (const sec of SECTIONS) {
     const id = sec.id;
@@ -217,7 +218,7 @@ function chooseSection(c) {
     if (id === 'india') ok = true;
     else if (id === 'knowledge' || id === 'spiritual') ok = sec.require.test(titles);
     else if (id === 'mumbai') ok = hits > 0;
-    else if (id === 'events') ok = hits > 0 && KW.mumbai.test(titles) && !political && (votes.events || 0) >= 1;
+    else if (id === 'events') ok = hits > 0 && KW.mumbai.test(titles) && !POLITICAL.test(titles) && !INCIDENT.test(titles) && (votes.events || 0) >= 1;
     else if (id === 'world') ok = hits > 0 && !KW.mumbai.test(titles);
     else if (political && !['markets', 'money', 'sports', 'gold'].includes(id)) ok = false; // politics and crime are news, not lifestyle or tech
     else if (id === 'movies' && !FILM.test(titles)) ok = false;
