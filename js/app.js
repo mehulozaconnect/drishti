@@ -202,7 +202,7 @@ function viewHome() {
   ${allRead ? `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up on today’s top stories</div>` : ''}
   <div class="card" style="padding:4px 14px">${must.map((s, i) => `<a class="mk ${S.read.has(s.id) ? 'read' : ''}" href="#story/${s.id}"><span class="num">${S.read.has(s.id) ? ic('check', 16, 2.6) : i + 1}</span><div class="col gap4 grow"><span class="ttl">${esc(s.headline || s.title)}</span><span class="meta"><span style="color:${secMeta(s.section).tint}">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)} · ${s.n > 1 ? `<span style="color:var(--ok)">${s.n} sources</span>` : esc(s.sources[0]?.name)}${s.breaking ? ' · <span class="badge b-live">Breaking</span>' : ''}</span></div></a>`).join('')}</div>
   ${hero ? `<div class="sec-head"><span class="h2">Top story</span></div><a class="hero" href="#story/${hero.id}">${img(hero, 220, true)}<div class="ov"><div class="row gap8"><span class="tag" style="color:${secMeta(hero.section).tint}">${esc(secMeta(hero.section).short)} · ${esc(hero.sources[0].name)}</span><span style="margin-left:auto">${verify(hero)}</span></div><span class="ttl">${esc(hero.headline || hero.title)}</span></div></a>` : ''}
-  ${fcs.length ? `<div class="sec-head"><span class="h2">Fake news busted</span><a href="#factchecks">See all</a></div>${fcs.map((f) => `<a class="fc mt8" href="${esc(f.link)}" target="_blank" rel="noopener">${ic('alert', 18, 2)}<span class="col"><span>${esc(f.title)}</span><span class="xs" style="opacity:.8">${esc(f.publisher)} · ${ago(f.time)}</span></span></a>`).join('')}` : ''}
+  ${fcs.length ? `<div class="sec-head"><span class="h2">Fake news busted</span><a href="#factchecks">See all</a></div>${fcs.map((f) => `<a class="fc mt8" href="#web/${encodeURIComponent(f.link)}">${ic('alert', 18, 2)}<span class="col"><span>${esc(f.title)}</span><span class="xs" style="opacity:.8">${esc(f.publisher)} · ${ago(f.time)}</span></span></a>`).join('')}` : ''}
   ${forYou}
   <div class="sec-head"><span class="h2">For your day</span></div>
   <div class="quote"><span class="eyebrow" style="color:#FFC48A">${ic('lotus', 14)} Thought of the day</span><p>${esc(th[0])}</p><span class="small muted">— ${esc(th[1])}</span></div>
@@ -227,9 +227,9 @@ function viewQuick(tab = 'all') {
       <h2>${esc(s.headline || s.title)}</h2>
       <p>${esc(s.summary || 'Tap below to read the full report.')}</p>
       <div class="row gap8" style="flex-wrap:wrap"><span class="xs muted">${ago(s.time)} ago</span>${verify(s)}<span class="badge" style="background:${m.color};color:${m.tint}">${esc(m.short)}</span></div>
-      ${s.factCheck ? `<a class="fc" href="${esc(s.factCheck.link)}" target="_blank" rel="noopener">${ic('alert', 18, 2)}<span>Related fact-check by ${esc(s.factCheck.source)}: ${esc(s.factCheck.title)}</span></a>` : ''}
+      ${s.factCheck ? `<a class="fc" href="#web/${encodeURIComponent(s.factCheck.link)}">${ic('alert', 18, 2)}<span>Related fact-check by ${esc(s.factCheck.source)}: ${esc(s.factCheck.title)}</span></a>` : ''}
       </div>
-      <a class="qmore" href="${esc(s.link)}" target="_blank" rel="noopener"><span class="col"><b>Read full story</b><span class="xs">at ${esc(src)}${s.n > 1 ? ` · also ${esc(s.sources.slice(1, 3).map((x) => x.name).join(', '))}` : ''}</span></span>${ic('ext', 20, 2)}</a>
+      <a class="qmore" href="#read/${s.id}"><span class="col"><b>Read full story</b><span class="xs">at ${esc(src)}${s.n > 1 ? ` · also ${esc(s.sources.slice(1, 3).map((x) => x.name).join(', '))}` : ''}</span></span>${ic('chev', 20, 2)}</a>
     </section>`;
   }).join('');
   const done = `<section class="qcard" style="align-items:center;justify-content:center;text-align:center;padding:24px"><span style="color:var(--ok)">${ic('check', 56, 2)}</span><h2 class="h1 mt16">All caught up</h2><p class="muted">You’ve seen ${list.length} stories${tab === 'all' ? '' : ' in ' + esc(secMeta(tab).short)}.</p><a class="btn btn-acc mt16" href="#home">Back to home</a></section>`;
@@ -249,7 +249,7 @@ function setupQuick(start, total, tab) {
   }), { root: w, threshold: [0.6] });
   w.querySelectorAll('.qcard').forEach((c) => io.observe(c));
 }
-const storyCard = (s) => { const m = secMeta(s.section); return `<article class="scard"><a href="#story/${s.id}" class="scimg">${img(s, 200, true)}<span class="qsrc" style="bottom:10px;left:10px">${avatars(s.sources, 1)}<span>${esc(s.sources[0]?.name || '')}</span></span></a><a href="#story/${s.id}" class="col gap6" style="padding:14px 16px 4px"><span class="sct">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="scs">${esc(s.summary)}</span>` : ''}</a><div class="row gap8" style="padding:6px 16px 14px;flex-wrap:wrap"><span class="xs muted">${ago(s.time)} ago</span>${verify(s)}${s.local ? '<span class="badge b-warn">Near you</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="${esc(s.link)}" target="_blank" rel="noopener">Full story ${ic('ext', 12, 2)}</a></div></article>`; };
+const storyCard = (s) => { const m = secMeta(s.section); return `<article class="scard"><a href="#story/${s.id}" class="scimg">${img(s, 200, true)}<span class="qsrc" style="bottom:10px;left:10px">${avatars(s.sources, 1)}<span>${esc(s.sources[0]?.name || '')}</span></span></a><a href="#story/${s.id}" class="col gap6" style="padding:14px 16px 4px"><span class="sct">${esc(s.headline || s.title)}</span>${s.summary ? `<span class="scs">${esc(s.summary)}</span>` : ''}</a><div class="row gap8" style="padding:6px 16px 14px;flex-wrap:wrap"><span class="xs muted">${ago(s.time)} ago</span>${verify(s)}${s.local ? '<span class="badge b-warn">Near you</span>' : ''}<a class="xs" style="margin-left:auto;color:var(--accent-text)" href="#read/${s.id}">Read full story ${ic('chev', 12, 2)}</a></div></article>`; };
 
 function viewStory(id) {
   const s = S.byId[id]; if (!s) return `${backBar()}<div class="empty">This story is no longer in today’s feed.</div>`;
@@ -261,11 +261,11 @@ function viewStory(id) {
   <h1 class="h1 mt12" style="font-size:27px;line-height:1.2">${esc(s.headline || s.title)}</h1>
   ${s.summary ? `<p style="font-size:16px;line-height:1.65;color:var(--text2)">${esc(s.summary)}</p>` : ''}
   ${s.ai ? `<p class="xs muted">${ic('sparkle', 12)} Summary written by AI from the outlets below. Tap a source for the full report.</p>` : ''}
-  ${s.factCheck ? `<a class="fc mt12" href="${esc(s.factCheck.link)}" target="_blank" rel="noopener">${ic('alert', 18, 2)}<span><b>Fact-check:</b> ${esc(s.factCheck.title)} <span class="xs">(${esc(s.factCheck.source)})</span></span></a>` : ''}
-  <div class="row gap8 mt16"><a class="btn btn-main" href="${esc(s.link)}" target="_blank" rel="noopener">Read full story ${ic('ext', 16, 2)}</a><button class="btn btn-ghost" data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button class="btn btn-ghost" data-act="share" data-id="${s.id}" aria-label="Share">${ic('share', 20)}</button></div>
+  ${s.factCheck ? `<a class="fc mt12" href="#web/${encodeURIComponent(s.factCheck.link)}">${ic('alert', 18, 2)}<span><b>Fact-check:</b> ${esc(s.factCheck.title)} <span class="xs">(${esc(s.factCheck.source)})</span></span></a>` : ''}
+  <div class="row gap8 mt16"><a class="btn btn-main" href="#read/${s.id}">Read full story ${ic('chev', 16, 2)}</a><button class="btn btn-ghost" data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button class="btn btn-ghost" data-act="share" data-id="${s.id}" aria-label="Share">${ic('share', 20)}</button></div>
   <a class="btn btn-line mt8" style="width:100%" href="#ask" data-act="askabout" data-id="${s.id}">${ic('sparkle', 18)} Ask Drishti about this</a>
   <div class="sec-head"><span class="h2">Reported by ${s.n} ${s.n === 1 ? 'outlet' : 'outlets'}</span></div>
-  ${s.sources.map((x) => `<a class="srcrow" href="${esc(x.url)}" target="_blank" rel="noopener"><span class="row gap8"><span class="av" style="background:${avColor(x.name)};margin:0">${esc(initials(x.name))}</span><span style="font-weight:500">${esc(x.name)}</span></span>${ic('ext', 16)}</a>`).join('')}
+  ${s.sources.map((x, i) => `<a class="srcrow" href="#read/${s.id}/${i}"><span class="row gap8"><span class="av" style="background:${avColor(x.name)};margin:0">${esc(initials(x.name))}</span><span style="font-weight:500">${esc(x.name)}</span></span>${ic('ext', 16)}</a>`).join('')}
   ${related.length ? `<div class="sec-head"><span class="h2">More in ${esc(m.short)}</span></div>${related.map(storyRow).join('')}` : ''}`;
 }
 
@@ -308,11 +308,85 @@ function viewSaved() {
 }
 function viewFactchecks() {
   const f = S.news?.factChecks || [];
-  return `${backBar('Explore')}<h1 class="h1 mt8">Fake news busted</h1><p class="small muted">Latest checks by BOOM, Alt News, Factly and PIB Fact Check. Before you forward something on WhatsApp, look here.</p>${f.map((x) => `<a class="fc mt8" href="${esc(x.link)}" target="_blank" rel="noopener">${ic('alert', 18, 2)}<span class="col"><span>${esc(x.title)}</span><span class="xs" style="opacity:.8">${esc(x.publisher)} · ${ago(x.time)} ago</span></span></a>`).join('') || '<div class="empty">No new fact-checks right now.</div>'}`;
+  return `${backBar('Explore')}<h1 class="h1 mt8">Fake news busted</h1><p class="small muted">Latest checks by BOOM, Alt News, Factly and PIB Fact Check. Before you forward something on WhatsApp, look here.</p>${f.map((x) => `<a class="fc mt8" href="#web/${encodeURIComponent(x.link)}">${ic('alert', 18, 2)}<span class="col"><span>${esc(x.title)}</span><span class="xs" style="opacity:.8">${esc(x.publisher)} · ${ago(x.time)} ago</span></span></a>`).join('') || '<div class="empty">No new fact-checks right now.</div>'}`;
 }
 function viewVideos() {
   const v = S.news?.videos || [];
   return `${backBar('Explore')}<h1 class="h1 mt8">Trending videos</h1><p class="small muted">Most popular on YouTube in India right now.</p><div class="col gap12 mt12">${v.map((x) => `<a class="vcard" href="https://www.youtube.com/watch?v=${esc(x.id)}" target="_blank" rel="noopener"><img src="${esc(x.thumb)}" alt="" loading="lazy"><div style="padding:10px 12px"><div style="font-weight:600;font-size:14px" class="clamp2">${esc(x.title)}</div><div class="xs muted mt8">${esc(x.channel)} · ${x.views >= 1e6 ? (x.views / 1e6).toFixed(1) + 'M' : Math.round(x.views / 1e3) + 'K'} views</div></div></a>`).join('') || '<div class="empty">Add a YouTube key to see trending videos.</div>'}</div>`;
+}
+
+
+// ---------- in-app reader ----------
+const READER_JUNK = /^(advertisement|also read|read more|read also|recommended|trending|follow us|subscribe|sign in|log ?in|share|copy link|whatsapp|facebook|twitter|telegram|google news|story continues|click here|download|for more|stay updated|first published|updated:|last updated|published:|edited by|written by|by\s|photo:|image:|file photo|representational|catch all|get the latest|you may also like|related|tags?:|topics?:|disclaimer|©)/i;
+function readerHtml(md, title) {
+  const out = []; let words = 0; const seen = new Set();
+  const lines = md.replace(/\r/g, '').split('\n');
+  for (let raw of lines) {
+    let ln = raw.trim();
+    if (!ln) continue;
+    if (/^!\[/.test(ln) || /^\[!\[/.test(ln)) continue; // images
+    ln = ln.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]+>/g, '').replace(/\*\*|__/g, '').trim();
+    if (!ln || seen.has(ln)) continue; seen.add(ln);
+    const h = /^#{1,4}\s+(.*)/.exec(ln);
+    if (h) { const t = h[1].trim(); if (t.length > 8 && t.length < 140 && words > 0 && t !== title && !READER_JUNK.test(t)) out.push(`<h3 class="rh">${esc(t)}</h3>`); continue; }
+    const li = /^[-*•]\s+(.*)/.exec(ln);
+    const text = (li ? li[1] : ln).replace(/^>\s*/, '').trim();
+    if (READER_JUNK.test(text) || text === title) continue;
+    if (text.length < 60 && !/[.!?”"]$/.test(text)) continue; // menus, labels, link lists
+    if ((text.match(/\|/g) || []).length > 2) continue;
+    out.push(li ? `<p class="rp">• ${esc(text)}</p>` : `<p class="rp">${esc(text)}</p>`);
+    words += text.split(/\s+/).length;
+    if (words > 2500) break;
+  }
+  return words > 60 ? out.join('') : '';
+}
+async function loadArticle(url) {
+  const key = 'art:' + url;
+  try { const c = sessionStorage.getItem(key); if (c) return c; } catch {}
+  const r = await fetch('https://r.jina.ai/' + url);
+  if (!r.ok) throw new Error('reader ' + r.status);
+  const t = await r.text();
+  const title = (/^Title:\s*(.*)$/m.exec(t) || [])[1] || ''; const md = 'Title: ' + title + '\n' + (t.includes('Markdown Content:') ? t.split('Markdown Content:')[1] : t);
+  try { sessionStorage.setItem(key, md); } catch {}
+  return md;
+}
+function viewRead(id, srcIdx) {
+  const s = S.byId[id]; if (!s) return `${backBar()}<div class="empty">This story is no longer in today’s feed.</div>`;
+  markRead(id);
+  const src = srcIdx != null && s.sources[srcIdx] ? s.sources[srcIdx] : { name: s.sources[0]?.name || '', url: s.link };
+  const url = srcIdx != null && s.sources[srcIdx] && !s.sources[srcIdx].url.includes('news.google.com') ? s.sources[srcIdx].url : s.link;
+  const m = secMeta(s.section);
+  setTimeout(async () => {
+    const box = $('#rbody'); if (!box) return;
+    try {
+      const md = await loadArticle(url);
+      const html = readerHtml(md, s.title);
+      if ($('#rbody') !== box) return;
+      box.innerHTML = html || readerFallback(s, url, 'This site shows only part of its story outside its own page.');
+    } catch (e) { if ($('#rbody') === box) box.innerHTML = readerFallback(s, url, 'Could not load the full article right now.'); }
+  }, 0);
+  return `${backBar()}
+  <div class="dimg">${img(s, 220, true)}</div>
+  <div class="row gap8 mt16" style="flex-wrap:wrap"><span class="badge" style="background:${m.color};color:${m.tint}">${esc(m.short)}</span>${verify(s)}<span class="xs muted">${ago(s.time)} ago</span></div>
+  <h1 class="rt">${esc(s.headline || s.title)}</h1>
+  <div class="row gap8 mt8">${avatars([src], 1)}<span class="small" style="font-weight:600">${esc(src.name)}</span>${s.n > 1 ? `<span class="xs muted">· also reported by ${s.n - 1} more</span>` : ''}</div>
+  <div id="rbody" class="mt16"><div class="col gap8">${[100, 96, 98, 70, 100, 92, 60].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div><p class="xs muted mt12">Loading the full story…</p></div>
+  <div class="row gap8 mt24"><button class="btn btn-ghost" data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button class="btn btn-ghost" data-act="share" data-id="${s.id}" aria-label="Share">${ic('share', 20)}</button><a class="btn btn-line grow" href="#ask" data-act="askabout" data-id="${s.id}">${ic('sparkle', 18)} Ask about this</a></div>
+  ${s.n > 1 ? `<div class="sec-head"><span class="h2" style="font-size:18px">Read it from another outlet</span></div>${s.sources.map((x, i) => i === (srcIdx ?? 0) ? '' : `<a class="srcrow" href="#read/${s.id}/${i}"><span class="row gap8"><span class="av" style="background:${avColor(x.name)};margin:0">${esc(initials(x.name))}</span><span style="font-weight:500">${esc(x.name)}</span></span>${ic('chev', 16)}</a>`).join('')}` : ''}
+  <p class="xs muted mt16" style="text-align:center">Article by ${esc(src.name)}, shown in reading view. <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--accent-text)">Open original page</a></p>`;
+}
+function viewWeb(enc) {
+  const url = decodeURIComponent(enc || '');
+  setTimeout(async () => {
+    const box = $('#rbody'); if (!box) return;
+    try { const md = await loadArticle(url); const t = (/^Title:\s*(.*)$/m.exec(md) || [])[1] || ''; const html = readerHtml(md, t); if ($('#rbody') === box) box.innerHTML = html || readerFallback({}, url, 'This page could not be shown in reading view.'); }
+    catch { if ($('#rbody') === box) box.innerHTML = readerFallback({}, url, 'Could not load this page right now.'); }
+  }, 0);
+  return `${backBar()}<span class="eyebrow mt8" style="display:block">${esc(domainName(url))}</span><div id="rbody" class="mt16"><div class="col gap8">${[100, 96, 98, 70, 100, 92].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div></div><p class="xs muted mt16" style="text-align:center"><a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--accent-text)">Open original page</a></p>`;
+}
+const domainName = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+function readerFallback(s, url, why) {
+  return `${s.summary ? `<p class="rp">${esc(s.summary)}</p>` : ''}<div class="card mt12 small muted">${why} <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--accent-text)">Open the original page</a> or try another outlet below.</div>`;
 }
 
 // ---------- money ----------
@@ -511,9 +585,9 @@ function render() {
   const [r, a] = route(); const v = $('#view');
   const map = { home: viewHome, quick: viewQuick, money: viewMoney, grow: viewGrow, ask: viewAsk, explore: viewExplore, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide };
   let html;
-  if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
-  const tab = { home: 'home', quick: 'quick', money: 'money', grow: 'money', calc: 'money', guide: 'money', learn: 'money', ask: 'ask' }[r] || (r === 'story' ? S.lastTab : 'explore');
-  if (r !== 'story') S.lastTab = tab;
+  if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read') html = viewRead(a, route()[2] != null ? Number(route()[2]) : null); else if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
+  const tab = r === 'read' || r === 'web' ? S.lastTab : { home: 'home', quick: 'quick', money: 'money', grow: 'money', calc: 'money', guide: 'money', learn: 'money', ask: 'ask' }[r] || (r === 'story' ? S.lastTab : 'explore');
+  if (!['story', 'read', 'web'].includes(r)) S.lastTab = tab;
   v.className = r === 'quick' ? 'full' : '';
   v.innerHTML = html;
   $('#navwrap').innerHTML = r === 'quick' ? '' : navHtml(tab || 'home');
