@@ -184,18 +184,18 @@ const KW = {
   markets: /\b(sensex|nifty|stocks?|shares?|market|markets|ipo|rbi|repo|inflation|gdp|rupee|earnings|profit|revenue|quarter|q[1-4]|sebi|investors?|fii|dii|crude|bonds?|economy|economic|trade deal|tariff|gst|exports?|imports?|dividend|bitcoin|crypto|ltd|limited|company|bank)\b/i,
   money: /\b(mutual funds?|sip|sips|nav|amc|elss|ppf|nps|income tax|itr|tax saving|fixed deposits?|fd rates?|savings|insurance|loan|loans|emi|credit card|personal finance|retirement|pension|epf|investment plan|wealth)\b/i,
   gold: /\b(gold|silver|bullion|jewell?ery|petrol|diesel|lpg|cng|fuel prices?|commodit(y|ies)|crude oil price|vegetable prices|tomato prices?|onion prices?)\b/i,
-  bollywood: /\b(bollywood|actor|actress|film|films|movie|box office|trailer|shah rukh|srk|salman|aamir|ranbir|alia|deepika|katrina|akshay|hrithik|kareena|ranveer|kartik|kriti|bigg boss|celebrity|celebs?|star kids?|bachchan|singer|ramayana|kangana|filmmaker|director)\b/i,
+  bollywood: /\b(bollywood|actor|actress|film|films|movie|box office|trailer|shah rukh|srk|salman|aamir|ranbir|alia|deepika|katrina|akshay|hrithik|kareena|ranveer|kartik|kriti|bigg boss|celebrity|celebs?|star kids?|bachchan|singer|ramayana|kangana|filmmaker|director|box office|ranbir|yash|sai pallavi)\b/i,
   movies: /\b(review|box office|collection|trailer|teaser|release|releases|ott|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|film|movie|cinema|ratings?|stars)\b/i,
   viral: /\b(viral|trending|internet|netizens|social media|video shows|caught on camera|instagram|reddit|meme|watch video|goes viral|x users)\b/i,
   phones: /\b(phone|phones|smartphone|iphone|galaxy|pixel|oneplus|xiaomi|redmi|vivo|oppo|realme|poco|motorola|nothing phone|iqoo|honor|huawei|android|ios|tablet|ipad|5g phone|flip|fold)\b/i,
   gadgets: /\b(ai|artificial intelligence|chatgpt|openai|gemini|google|microsoft|apple|meta|tech|technology|software|app|apps|startup|laptop|chip|chips|nvidia|semiconductor|cyber|hack|hackers|outage|robot|ev|electric vehicle|tesla|spacex|isro|satellite|gadget|smartwatch|earbuds|wearable|internet|data centre|elon musk|ps5|playstation|xbox|console|gaming|gta|whatsapp|telegram|youtube)\b/i,
-  health: /\b(health|healthy|hospital|doctors?|disease|dengue|malaria|covid|virus|vaccine|cancer|diabetes|heart|fitness|diet|nutrition|sleep|mental health|yoga|wellness|skin|hair|weight loss|exercise|ayurved\w*|medicine|medical|drug|icmr|lifestyle|food|foods|recipe|parenting|pregnan\w*|aqi|pollution|air quality)\b/i,
+  health: /\b(health|healthy|hospital|doctors?|disease|dengue|malaria|covid|virus|vaccine|cancer|diabetes|heart|fitness|diet|nutrition|sleep|mental health|yoga|wellness|skin|hair|weight loss|exercise|ayurved\w*|medicine|medical|drug|icmr|lifestyle|food|foods|recipe|parenting|pregnan\w*|lungs?|stroke|kidney|liver|cholesterol|blood pressure|bp|obesity)\b/i,
   sports: /\b(cricket|ipl|test|odi|t20|bcci|icc|football|fifa|isl|hockey|tennis|badminton|olympics?|kabaddi|chess|f1|formula 1|athlet\w*|wickets?|innings|century|squad|coach|tournament|league|match|medal|world cup|grand prix|boxing|wrestling|kohli|rohit|gill|bumrah|dhoni|asia cup|u-?19|ranji|smat|final|semi-?final|quarter-?final|masters|open|championships?|champions|trophy|premier league|la liga|manchester|liverpool|arsenal|chelsea|barcelona|real madrid|pochettino|nba|atp|wta|grand slam|lakshya|sindhu|neeraj|goalkeeper|striker|batter|bowler|pacer|spinner)\b/i
 };
 const POLITICAL = /\b(fir|jawan|crpf|bjp|congress|rahul gandhi|modi|amit shah|minister|ministers|mla|mp|cbi|ed raid|police|arrest|arrested|court|judge|custody|election|polls?|murder|killed|scam|betting|thackeray|shiv sena)\b/i;
 const FASHION = /\b(fashion|style|stylish|outfit|look|looks|dressed|designer|red carpet|bandhgala|saree|lehenga|brooch(es)?|gown|couture|manish malhotra|sabyasachi|celebrity|celebs?|airport look)\b/i;
 const FEED_TRUSTED_TOPIC = new Set(['sports', 'markets', 'money']);
-const FILM = /\b(film|films|movie|movies|cinema|ott|box office|trailer|teaser|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|actor|actress|director|series|bollywood|tollywood|kollywood|song|review|starrer|shoot|sets?|biopic|sequel|bigg boss|iffi)\b/i;
+const FILM = /\b(film|films|movie|movies|cinema|ott|box office|trailer|teaser|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|actor|actress|director|series|bollywood|tollywood|kollywood|movie review|film review|starrer|biopic|sequel|bigg boss|iffi|ramayana)\b/i;
 KW.spiritual = /\b(temple|puja|pooja|spiritual|devotees?|pilgrims?|aarti|darshan|bhagavad|gita|kumbh|tirupati|shirdi|iskcon|siddhivinayak|mahalaxmi|vrat|muhurat|tithi|ekadashi|meditation|sadhguru|gurudwara|chhath|navratri|ganesh chaturthi|ganeshotsav|religious|kharna|prasad|katha|nahay)\b/i;
 const TOPICAL = new Set(['markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
@@ -204,7 +204,7 @@ function chooseSection(c) {
   const titles = c.items.map((i) => i.title).join(' . ');
   const votes = {};
   for (const i of c.items) votes[i.origin] = (votes[i.origin] || 0) + (i.google ? 1 : 3);
-  let best = null, bestScore = -1;
+  let best = null, bestScore = -1, strongTopic = null, strongScore = -1;
   for (const sec of SECTIONS) {
     const id = sec.id;
     const hits = KW[id] ? (text.match(new RegExp(KW[id].source, 'gi')) || []).length : 0;
@@ -224,7 +224,10 @@ function chooseSection(c) {
     if (TOPICAL.has(id) && hits < 2 && KW.mumbai.test(titles)) score -= 4; // a Mumbai story with only a passing topic word stays in Mumbai
     if (id === 'knowledge' && sec.require.test(titles)) score += 3;
     if (score > bestScore) { bestScore = score; best = sec; }
+    if (TOPICAL.has(id) && hits >= 2 && score > strongScore) { strongScore = score; strongTopic = sec; }
   }
+  // a clear topic (two or more topic words) beats the general India and World buckets
+  if (best && (best.id === 'india' || best.id === 'world') && strongTopic) return strongTopic;
   return best || SEC_BY_ID.india;
 }
 
