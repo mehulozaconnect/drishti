@@ -225,7 +225,11 @@ export const SECTIONS = [
       'https://www.hindustantimes.com/feeds/rss/lifestyle/rssfeed.xml',
       g('site:indianexpress.com lifestyle'),
       g('fitness diet sleep tips study'),
-      g('site:healthshots.com')
+      g('site:healthshots.com'),
+      'https://timesofindia.indiatimes.com/rssfeeds/3908999.cms',
+      g('health news India doctors'),
+      g('wellness OR nutrition OR mental health tips'),
+      g('site:thehindu.com health')
     ]
   },
   {
