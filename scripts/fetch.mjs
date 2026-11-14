@@ -184,7 +184,7 @@ const KW = {
   markets: /\b(sensex|nifty|stocks?|shares?|market|markets|ipo|rbi|repo|inflation|gdp|rupee|earnings|profit|revenue|quarter|q[1-4]|sebi|investors?|fii|dii|crude|bonds?|economy|economic|trade deal|tariff|gst|exports?|imports?|dividend|bitcoin|crypto|ltd|limited|company|bank)\b/i,
   money: /\b(mutual funds?|sip|sips|nav|amc|elss|ppf|nps|income tax|itr|tax saving|fixed deposits?|fd rates?|savings|insurance|loan|loans|emi|credit card|personal finance|retirement|pension|epf|investment plan|wealth)\b/i,
   gold: /\b(gold|silver|bullion|jewell?ery|petrol|diesel|lpg|cng|fuel prices?|commodit(y|ies)|crude oil price|vegetable prices|tomato prices?|onion prices?)\b/i,
-  bollywood: /\b(bollywood|actor|actress|film|films|movie|box office|trailer|shah rukh|srk|salman|aamir|ranbir|alia|deepika|katrina|akshay|hrithik|kareena|ranveer|kartik|kriti|bigg boss|celebrity|celebs?|star kids?|bachchan|singer|ramayana|kangana|filmmaker|director|box office|ranbir|yash|sai pallavi)\b/i,
+  bollywood: /\b(bollywood|actor|actress|film|films|movie|box office|trailer|shah rukh|srk|salman|aamir|ranbir|alia|deepika|katrina|akshay|hrithik|kareena|ranveer|kartik|kriti|bigg boss|celebrity|celebs?|star kids?|bachchan|singer|ramayana|kangana|filmmaker|director|box office|ranbir|yash|sai pallavi|fashion|designer|manish malhotra|sabyasachi|red carpet|style)\b/i,
   movies: /\b(review|box office|collection|trailer|teaser|release|releases|ott|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|film|movie|cinema|ratings?|stars)\b/i,
   viral: /\b(viral|trending|internet|netizens|social media|video shows|caught on camera|instagram|reddit|meme|watch video|goes viral|x users)\b/i,
   phones: /\b(phone|phones|smartphone|iphone|galaxy|pixel|oneplus|xiaomi|redmi|vivo|oppo|realme|poco|motorola|nothing phone|iqoo|honor|huawei|android|ios|tablet|ipad|5g phone|flip|fold)\b/i,
@@ -202,6 +202,7 @@ const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
 function chooseSection(c) {
   const text = c.items.map((i) => i.title).join(' . ');
   const titles = c.items.map((i) => i.title).join(' . ');
+  const tl = c.items.map((i) => i.title); const political = tl.filter((t) => POLITICAL.test(t)).length > tl.length / 2; // most outlets frame it as politics or crime
   const votes = {};
   for (const i of c.items) votes[i.origin] = (votes[i.origin] || 0) + (i.google ? 1 : 3);
   let best = null, bestScore = -1, strongTopic = null, strongScore = -1;
@@ -214,8 +215,9 @@ function chooseSection(c) {
     else if (id === 'knowledge' || id === 'spiritual') ok = sec.require.test(titles);
     else if (id === 'mumbai') ok = hits > 0;
     else if (id === 'world') ok = hits > 0 && !KW.mumbai.test(titles);
-    else if (POLITICAL.test(titles) && !['markets', 'money', 'sports', 'gold'].includes(id)) ok = false; // politics and crime are news, not lifestyle or tech
-    else if ((id === 'movies' || id === 'bollywood') && !FILM.test(titles)) ok = false;
+    else if (political && !['markets', 'money', 'sports', 'gold'].includes(id)) ok = false; // politics and crime are news, not lifestyle or tech
+    else if (id === 'movies' && !FILM.test(titles)) ok = false;
+    else if (id === 'bollywood' && !FILM.test(titles) && !FASHION.test(titles)) ok = false;
     else if (id === 'health' && FASHION.test(titles)) ok = false; // fashion and celebrity style are not health
     else ok = hits >= 2 || (hits >= 1 && (votes[id] || 0) >= 1) || ((votes[id] || 0) >= 3 && FEED_TRUSTED_TOPIC.has(id)); // keyword plus the topic's own feed
     if (!ok) continue;
