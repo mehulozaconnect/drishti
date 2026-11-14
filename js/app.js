@@ -559,7 +559,7 @@ function md(t) {
 function viewAsk() {
   const hasKey = !!S.settings.key;
   const sugg = ['Why did the market move today?', 'Gold price trend this week', 'Best phone under ₹30,000 right now', 'What’s happening with Iran and Israel?', 'Explain today’s top news in Hindi', 'How do I start a SIP with ₹5,000?'];
-  const msgs = S.chat.map((m) => m.role === 'user' ? `<div class="msg-u">${esc(m.text)}</div>` : `<div class="msg-a">${logo(28)}<div class="bub">${m.pending ? '<span class="typing"><span></span><span></span><span></span></span>' : md(m.text)}${m.sources?.length ? `<div class="row gap6 mt8" style="flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--line)">${m.sources.slice(0, 5).map((s) => `<a class="chip" href="${esc(s.uri)}" target="_blank" rel="noopener" style="font-size:11px;padding:4px 8px">${esc(s.title.slice(0, 28))}</a>`).join('')}</div>` : ''}</div></div>`).join('');
+  const msgs = S.chat.map((m) => m.role === 'user' ? `<div class="msg-u">${esc(m.text)}</div>` : `<div class="msg-a">${logo(28)}<div class="bub">${m.pending ? '<span class="typing"><span></span><span></span><span></span></span>' : md(m.text)}${m.note ? `<p class="xs muted" style="margin-top:8px">${esc(m.note)}</p>` : ''}${m.sources?.length ? `<div class="row gap6 mt8" style="flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--line)">${m.sources.slice(0, 5).map((s) => `<a class="chip" href="${esc(s.uri)}" target="_blank" rel="noopener" style="font-size:11px;padding:4px 8px">${esc(s.title.slice(0, 28))}</a>`).join('')}</div>` : ''}</div></div>`).join('');
   setTimeout(() => { window.scrollTo(0, document.body.scrollHeight); }, 30);
   return `<div class="top"><div class="row gap8">${logo(40)}<div class="col"><h1 class="h1" style="font-size:24px">Ask Drishti</h1><span class="xs muted">Answers from today’s verified news${hasKey ? ' and the web' : ''}</span></div></div>${S.chat.length ? `<button class="ibtn" data-act="clearchat" aria-label="New chat">${ic('refresh')}</button>` : ''}</div>
   ${!hasKey ? `<div class="card mt12" style="border-color:var(--accent)"><b>Turn on Ask Drishti</b><p class="small muted" style="margin:6px 0 10px">It uses Google’s free Gemini AI. Get a free key in 1 minute at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent-text)">aistudio.google.com/apikey</a>, then paste it here. It stays only on this phone.</p><form data-form="key" class="row gap8"><input class="inp" name="key" placeholder="Paste Gemini API key" autocomplete="off" aria-label="Gemini API key"><button class="btn btn-acc">Save</button></form></div>` : ''}
@@ -574,30 +574,60 @@ function newsContext() {
   const w = S.weather?.w?.current ? `Weather in ${S.weather.loc.name}: ${Math.round(S.weather.w.current.temperature_2m)}°C, ${WMO(S.weather.w.current.weather_code)[0]}, India AQI ${S.weather.aqi ?? 'n/a'} (${aqiLabel(S.weather.aqi)}).` : '';
   return `Today is ${new Date().toLocaleString('en-IN', { dateStyle: 'full', timeStyle: 'short' })} IST. User lives in Mumbai (Malad West). ${w}\nMarkets: ${mk}\n\nToday's verified news (section | headline | summary | outlets):\n${top.map((s) => `- ${s.section} | ${s.headline || s.title} | ${s.summary || ''} | ${s.sources.map((x) => x.name).join(', ')}`).join('\n')}`;
 }
-async function ask(qText) {
+async function ask(qText, ctx = '') {
   if (!S.settings.key) { toast('Add your free Gemini key first'); return; }
-  S.chat.push({ role: 'user', text: qText }); const ans = { role: 'model', text: '', pending: true }; S.chat.push(ans); render();
-  const sys = `You are Drishti, a personal news and money assistant for an Indian user in Mumbai. Reply in short, mobile-friendly answers (under 180 words unless asked for more), with bullets where helpful. Use the verified news below first and name the outlets you rely on. If the news below does not cover it, use Google Search results and say so. Never make up facts, prices or quotes. For investing: explain options, risks and how things work in simple terms, but never tell the user to buy or sell a specific stock or fund; suggest a SEBI-registered adviser for personal advice. Reply in Hindi if the user writes in Hindi or asks for it.\n\n${newsContext()}`;
-  const contents = S.chat.filter((m) => !m.pending).slice(-10).map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
+  S.chat.push({ role: 'user', text: qText, ctx }); const ans = { role: 'model', text: '', pending: true }; S.chat.push(ans); render();
+  if (typeof ctx === 'function') { try { ctx = await ctx(); } catch { ctx = ''; } S.chat[S.chat.length - 2].ctx = ctx; }
+  const sys = `You are Drishti, a friendly personal news and money assistant for an Indian reader in Mumbai.
+Style: answer directly in plain language, mobile-friendly, under 170 words unless asked for more, bullets where they help. Never start with phrases like "Based on the verified news provided" or "According to the context"; just answer. Name outlets naturally when it helps ("Mint reports…").
+Accuracy: stay on exactly the topic the user asked about. If the user's message includes a STORY block, that story is the topic: explain it, why it matters and what happens next, using the article text given. If you don't have enough information, use Google Search; if you still can't find it, say briefly that details aren't available yet. Never swap in a different story or product. Never invent facts, prices or quotes.
+Money: explain options, risks and how things work; never tell the user to buy or sell a specific stock or fund; suggest a SEBI-registered adviser for personal advice.
+Language: reply in Hindi if the user writes in Hindi or asks for it.
+
+Background (today's verified headlines, use when relevant):
+${newsContext()}`;
+  const contents = S.chat.filter((m) => !m.pending).slice(-10).map((m) => ({ role: m.role, parts: [{ text: m.role === 'user' && m.ctx ? `${m.ctx}\n\nQuestion: ${m.text}` : m.text }] }));
   const models = [S.settings.model, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'].filter((v, i, a) => v && a.indexOf(v) === i);
-  let err = '';
+  let err = '', searchErr = '';
   outer: for (const model of models) {
-    for (const tools of [[{ google_search: {} }], null]) {
+    for (const tools of (S.noSearch ? [null] : [[{ google_search: {} }], null])) {
       try {
-        const body = { system_instruction: { parts: [{ text: sys }] }, contents, generationConfig: { temperature: 0.4, maxOutputTokens: 1200 } };
+        const body = { system_instruction: { parts: [{ text: sys }] }, contents, generationConfig: { temperature: 0.3, maxOutputTokens: 1400 } };
         if (tools) body.tools = tools;
         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(S.settings.key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const j = await r.json();
-        if (!r.ok) { err = j?.error?.message || ('Error ' + r.status); if (r.status === 400 && /API key/i.test(err)) break outer; if (r.status === 429) break outer; continue; }
+        if (!r.ok) {
+          err = j?.error?.message || ('Error ' + r.status);
+          if (tools) { searchErr = err; console.warn('Gemini with search failed:', err); continue; } // retry without search
+          if (/API key/i.test(err)) break outer;
+          continue;
+        }
         const c = j.candidates?.[0];
-        ans.text = c?.content?.parts?.map((p) => p.text || '').join('').trim() || 'I could not find an answer to that.';
+        ans.text = c?.content?.parts?.map((p) => p.text || '').join('').trim() || 'I couldn’t find an answer to that yet.';
         ans.sources = (c?.groundingMetadata?.groundingChunks || []).map((g) => g.web).filter(Boolean);
+        if (!tools && searchErr) { ans.note = 'Web search was unavailable for this answer.'; if (/not supported|not enabled|permission/i.test(searchErr)) S.noSearch = true; }
         ans.pending = false; render(); return;
       } catch (e) { err = e.message; }
     }
   }
   ans.pending = false; ans.text = /API key/i.test(err) ? 'Your Gemini key looks invalid. Check it in Settings.' : /quota|429|exhaust/i.test(err) ? 'The free AI limit is used up for now. Try again in a minute.' : 'Could not reach the AI right now (' + err.slice(0, 120) + '). Check your internet and try again.';
   render();
+}
+// full story text for "Ask about this", so answers stay on the right story
+async function storyContext(s) {
+  let text = '';
+  try {
+    const html = await Promise.race([articleHtml(s.link, s.title), new Promise((r) => setTimeout(() => r(''), 9000))]);
+    text = new DOMParser().parseFromString(html || '', 'text/html').body.textContent.replace(/\s+/g, ' ').trim().slice(0, 6000);
+  } catch {}
+  return `STORY
+Headline: ${s.headline || s.title}
+Section: ${secMeta(s.section).name}
+Reported by: ${s.sources.map((x) => x.name).join(', ')}
+Published: ${new Date(s.time).toLocaleString('en-IN')}
+Summary: ${s.summary || ''}
+Link: ${s.link}
+Article text: ${text || '(not available, use the summary and search the web)'}`;
 }
 
 // ---------- settings ----------
@@ -673,7 +703,7 @@ document.addEventListener('click', async (e) => {
   else if (act === 'range') { S.range = b.dataset.r; render(); }
   else if (act === 'guide') { const i = Number(b.dataset.i); S.guide = S.guide.includes(i) ? S.guide.filter((x) => x !== i) : [...S.guide, i]; LS.set('guide', S.guide); render(); }
   else if (act === 'askq') { e.preventDefault(); if (!location.hash.startsWith('#ask')) location.hash = '#ask'; setTimeout(() => ask(b.dataset.q), 60); }
-  else if (act === 'askabout') { e.preventDefault(); const s = S.byId[id]; location.hash = '#ask'; setTimeout(() => ask(`Tell me more about this story and why it matters: "${s.headline || s.title}"`), 60); }
+  else if (act === 'askabout') { e.preventDefault(); const st = S.byId[id]; if (!st) return; location.hash = '#ask'; setTimeout(() => ask(`Tell me more about: ${st.headline || st.title}`, () => storyContext(st)), 60); }
   else if (act === 'clearchat') { S.chat = []; render(); }
   else if (act === 'mic') {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const rec = new SR(); rec.lang = 'en-IN'; rec.interimResults = false;
