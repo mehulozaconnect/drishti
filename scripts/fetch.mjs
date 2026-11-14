@@ -157,21 +157,66 @@ const BREAKING = /\b(breaking|killed|dead|dies|death toll|blast|explosion|attack
 
 function clusterItems(items) {
   items.sort((a, b) => b.time - a.time);
-  const clusters = [];
+  const clusters = []; const index = new Map();
   for (const it of items) {
     const tk = tokens(it.title);
     if (tk.size < 2) continue;
+    const cand = new Set();
+    for (const w of tk) for (const ci of index.get(w) || []) cand.add(ci);
     let best = null, bs = 0;
-    for (const c of clusters) {
-      const s = similar(tk, c.tk);
-      if (s > bs) { bs = s; best = c; }
+    for (const ci of cand) { const c = clusters[ci]; const sc = similar(tk, c.tk); if (sc > bs) { bs = sc; best = ci; } }
+    if (best != null && bs >= 0.4) {
+      const c = clusters[best];
+      if (!c.items.some((x) => x.link === it.link)) c.items.push(it);
+      for (const w of tk) if (!c.tk.has(w)) { c.tk.add(w); (index.get(w) || index.set(w, []).get(w)).push(best); }
+    } else {
+      const ci = clusters.push({ tk: new Set(tk), items: [it] }) - 1;
+      for (const w of tk) (index.get(w) || index.set(w, []).get(w)).push(ci);
     }
-    if (best && bs >= 0.4) {
-      if (!best.items.some((x) => x.link === it.link)) best.items.push(it);
-      for (const w of tk) best.tk.add(w);
-    } else clusters.push({ tk: new Set(tk), items: [it] });
   }
   return clusters;
+}
+
+// ---------- which section a story belongs to ----------
+const KW = {
+  mumbai: /\b(mumbai|thane|navi mumbai|malad|marve|andheri|bandra|borivali|kandivali|goregaon|dadar|kurla|ghatkopar|powai|juhu|colaba|worli|vasai|virar|panvel|kalyan|dombivli|bmc|best (bus|buses|undertaking)|western railway|central railway|harbour line|local trains?|mira road|bhayandar|oshiwara|chembur|sion|mulund|vikhroli|byculla|marine drive|bkc|lokhandwala|versova|santacruz|vile parle|matunga|mahim|lower parel|prabhadevi|cst|churchgate|mmrda|metro line)\b/i,
+  world: /\b(us|u\.s\.|usa|america|american|trump|washington|white house|pentagon|china|chinese|beijing|xi|russia|russian|putin|ukraine|kyiv|israel|israeli|gaza|hamas|hezbollah|iran|iranian|tehran|pakistan|pakistani|uk|britain|british|london|europe|european|eu|nato|united nations|un|japan|korea|afghan|taliban|syria|saudi|uae|dubai|qatar|bangladesh|nepal|sri lanka|canada|australia|africa|france|germany|paris|berlin|apec|g20|g7|global|world|international|new orleans|mississippi|faa)\b/i,
+  markets: /\b(sensex|nifty|stocks?|shares?|market|markets|ipo|rbi|repo|inflation|gdp|rupee|earnings|profit|revenue|quarter|q[1-4]|sebi|investors?|fii|dii|crude|bonds?|economy|economic|trade deal|tariff|gst|exports?|imports?|dividend|bitcoin|crypto|ltd|limited|company|bank)\b/i,
+  money: /\b(mutual funds?|sip|sips|nav|amc|elss|ppf|nps|income tax|itr|tax saving|fixed deposits?|fd rates?|savings|insurance|loan|loans|emi|credit card|personal finance|retirement|pension|epf|investment plan|wealth)\b/i,
+  gold: /\b(gold|silver|bullion|jewell?ery|petrol|diesel|lpg|cng|fuel prices?|commodit(y|ies)|crude oil price|vegetable prices|tomato prices?|onion prices?)\b/i,
+  bollywood: /\b(bollywood|actor|actress|film|films|movie|box office|trailer|shah rukh|srk|salman|aamir|ranbir|alia|deepika|katrina|akshay|hrithik|kareena|ranveer|kartik|kriti|bigg boss|celebrity|celebs?|star kids?|kapoor|khan|bachchan|singer|song|music|wedding|ramayana)\b/i,
+  movies: /\b(review|box office|collection|trailer|teaser|release|releases|ott|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|film|movie|cinema|ratings?|stars)\b/i,
+  viral: /\b(viral|trending|internet|netizens|social media|video shows|caught on camera|instagram|reddit|meme|watch video|goes viral|x users)\b/i,
+  phones: /\b(phone|phones|smartphone|iphone|galaxy|pixel|oneplus|xiaomi|redmi|vivo|oppo|realme|poco|motorola|nothing phone|iqoo|honor|huawei|android|ios|tablet|ipad|5g phone|flip|fold)\b/i,
+  gadgets: /\b(ai|artificial intelligence|chatgpt|openai|gemini|google|microsoft|apple|meta|tech|technology|software|app|apps|startup|laptop|chip|chips|nvidia|semiconductor|cyber|hack|hackers|outage|robot|ev|electric vehicle|tesla|spacex|isro|satellite|gadget|smartwatch|earbuds|wearable|internet|data centre|elon musk)\b/i,
+  health: /\b(health|healthy|hospital|doctors?|disease|dengue|malaria|covid|virus|vaccine|cancer|diabetes|heart|fitness|diet|nutrition|sleep|mental health|yoga|wellness|skin|hair|weight loss|exercise|ayurved\w*|medicine|medical|drug|who|icmr|lifestyle|food|foods|recipe|parenting|pregnan\w*|aqi|pollution|air quality)\b/i,
+  sports: /\b(cricket|ipl|test|odi|t20|bcci|icc|football|fifa|isl|hockey|tennis|badminton|olympics?|kabaddi|chess|f1|formula 1|athlet\w*|wickets?|innings|century|squad|coach|tournament|league|match|medal|world cup|grand prix|boxing|wrestling|kohli|rohit|gill|bumrah|dhoni|asia cup|u-?19|ranji|smat)\b/i
+};
+const TOPICAL = new Set(['markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
+const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
+function chooseSection(c) {
+  const text = c.items.map((i) => i.title).join(' . ') + ' ' + (c.items.find((i) => i.desc)?.desc || '').slice(0, 300);
+  const titles = c.items.map((i) => i.title).join(' . ');
+  const votes = {};
+  for (const i of c.items) votes[i.origin] = (votes[i.origin] || 0) + (i.google ? 1 : 3);
+  let best = null, bestScore = -1;
+  for (const sec of SECTIONS) {
+    const id = sec.id;
+    const hits = KW[id] ? (text.match(new RegExp(KW[id].source, 'gi')) || []).length : 0;
+    if (sec.exclude && sec.exclude.test(titles)) continue;
+    let ok;
+    if (id === 'india') ok = true;
+    else if (id === 'knowledge' || id === 'spiritual') ok = sec.require.test(titles);
+    else if (id === 'mumbai') ok = hits > 0;
+    else if (id === 'world') ok = hits > 0 && !KW.mumbai.test(titles);
+    else ok = hits > 0 || (votes[id] || 0) >= 3; // a trusted topic feed also counts
+    if (!ok) continue;
+    let score = (votes[id] || 0) + Math.min(hits, 4) * (TOPICAL.has(id) ? 3 : 2);
+    if (id === 'india') score -= 1; // general bucket loses ties
+    if (id === 'knowledge' && sec.require.test(titles)) score += 3;
+    if (score > bestScore) { bestScore = score; best = sec; }
+  }
+  return best || SEC_BY_ID.india;
 }
 
 function buildStory(c, section) {
@@ -437,34 +482,28 @@ async function main() {
   const state = await readJson('state.json', { alerted: [], briefDate: '' }, CACHE);
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
-    const lists = await Promise.all(sec.feeds.map(loadFeed));
+    const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i) => ({ ...i, origin: sec.id, google: u.includes('news.google.com') }))));
     const maxAge = sec.id === 'knowledge' ? 168 : (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
-    return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title) && (!sec.require || sec.require.test(i.title)) && (!sec.exclude || !sec.exclude.test(i.title)));
+    return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title) && (!sec.exclude || !sec.exclude.test(i.title)));
   }));
   const checkItems = (await Promise.all(FACTCHECK_FEEDS.map(loadFeed))).flat().filter((i) => NOW - i.time < 7 * 864e5);
   learnDF([...sectionItems.flat(), ...checkItems].map((i) => i.title));
 
+  // one pool for all feeds: the same event from any feed becomes one story, then each story gets the one section it fits best
+  const clusters = clusterItems(sectionItems.flat());
+  const bySection = Object.fromEntries(SECTIONS.map((x) => [x.id, []]));
+  for (const c of clusters) {
+    const sec = chooseSection(c);
+    const st = buildStory(c, sec); st.alt = c.items.map((i) => i.title).filter((t) => t !== st.title).slice(0, 3);
+    bySection[sec.id].push(st);
+  }
   let all = [];
   const sections = [];
-  SECTIONS.forEach((sec, idx) => {
-    const clusters = clusterItems(sectionItems[idx]);
-    const stories = clusters.map((c) => { const s = buildStory(c, sec); s.alt = c.items.map((i) => i.title).filter((t) => t !== s.title).slice(0, 3); return s; });
-    stories.sort((a, b) => b.score - a.score);
-    const top = stories.slice(0, 40);
+  for (const sec of SECTIONS) {
+    const top = bySection[sec.id].sort((a, b) => b.score - a.score).slice(0, 40);
     sections.push({ id: sec.id, name: sec.name, short: sec.short, color: sec.color, tint: sec.tint, icon: sec.icon, count: top.length });
     all.push(...top);
-  });
-
-  // remove cross-section duplicates: keep the higher-scored copy, add the other as "also in"
-  all.sort((a, b) => b.score - a.score);
-  const kept = [];
-  for (const s of all) {
-    const tk = tokens(s.title);
-    const dup = kept.find((k) => similar(tokens(k.title), tk) >= 0.6);
-    if (dup) { for (const p of s.sources) if (!dup.sources.some((x) => x.name === p.name)) dup.sources.push(p); dup.n = dup.sources.length; (dup.also ||= []).includes(s.section) || dup.also.push(s.section); if (!dup.image && s.image) dup.image = s.image; continue; }
-    kept.push(s);
   }
-  all = kept;
 
   const checks = clusterItems(checkItems).map((c) => c.items[0]).slice(0, 25).map((c) => ({ title: c.title, publisher: c.publisher, link: c.link, time: c.time }));
   // fact-checks from Google News: turn redirect links into the real BOOM / Alt News / PIB article links
