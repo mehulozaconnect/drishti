@@ -203,7 +203,7 @@ const KW = {
   health: /\b(health|healthy|hospital|doctors?|disease|dengue|malaria|covid|virus|vaccine|cancer|diabetes|heart|fitness|diet|nutrition|sleep|mental health|yoga|wellness|skin|hair|weight loss|exercise|ayurved\w*|medicine|medical|drug|icmr|lifestyle|food|foods|recipe|parenting|pregnan\w*|lungs?|stroke|kidney|liver|cholesterol|blood pressure|bp|obesity)\b/i,
   sports: /\b(cricket|ipl|test|odi|t20|bcci|icc|football|fifa|isl|hockey|tennis|badminton|olympics?|kabaddi|chess|f1|formula 1|athlet\w*|wickets?|innings|century|squad|coach|tournament|league|match|medal|world cup|grand prix|boxing|wrestling|kohli|rohit|gill|bumrah|dhoni|asia cup|u-?19|ranji|smat|final|semi-?final|quarter-?final|masters|open|championships?|champions|trophy|premier league|la liga|manchester|liverpool|arsenal|chelsea|barcelona|real madrid|pochettino|nba|atp|wta|grand slam|lakshya|sindhu|neeraj|goalkeeper|striker|batter|bowler|pacer|spinner)\b/i
 };
-const POLITICAL = /\b(fir|jawan|crpf|bjp|congress|rahul gandhi|modi|amit shah|minister|ministers|mla|mp|cbi|ed raid|police|arrest|arrested|court|judge|custody|election|polls?|murder|killed|scam|betting|thackeray|shiv sena)\b/i;
+const POLITICAL = /\b(pm|rahul|pitroda|akhilesh|kejriwal|owaisi|tapping|snoop\w*|fir|jawan|crpf|bjp|congress|rahul gandhi|modi|amit shah|minister|ministers|mla|mp|cbi|ed raid|police|arrest|arrested|court|judge|custody|election|polls?|murder|killed|scam|betting|thackeray|shiv sena)\b/i;
 const FASHION = /\b(fashion|style|stylish|outfit|look|looks|dressed|designer|red carpet|bandhgala|saree|lehenga|brooch(es)?|gown|couture|manish malhotra|sabyasachi|celebrity|celebs?|airport look)\b/i;
 const FEED_TRUSTED_TOPIC = new Set(['sports', 'markets', 'money']);
 const FILM = /\b(film|films|movie|movies|cinema|ott|box office|trailer|teaser|netflix|prime video|hotstar|jiohotstar|zee5|sonyliv|actor|actress|director|series|bollywood|tollywood|kollywood|movie review|film review|starrer|biopic|sequel|bigg boss|iffi|ramayana)\b/i;
@@ -588,8 +588,14 @@ async function main() {
   }
   // Quick 60: must-know first, then top 3-4 per section
   const q = new Set(mustKnow);
-  const bySec = SECTIONS.map((sec) => all.filter((x) => x.section === sec.id));
-  for (let r = 0; r < 8; r++) for (const [k, list] of bySec.entries()) { const take = SECTIONS[k].id === 'mumbai' ? 2 : 1; for (const s of list.slice(r * take, r * take + take)) q.add(s.id); }
+  // then the best of everything else, at most 5 per section, so the feed is important first but still varied
+  const perQ = {};
+  for (const id of q) { const st = all.find((x) => x.id === id); perQ[st.section] = (perQ[st.section] || 0) + 1; }
+  for (const st of [...all].sort((a, b) => b.score * (b.n > 1 ? 1.2 : 1) - a.score * (a.n > 1 ? 1.2 : 1))) {
+    if (q.size >= 90) break;
+    if (q.has(st.id) || (perQ[st.section] || 0) >= 5) continue;
+    q.add(st.id); perQ[st.section] = (perQ[st.section] || 0) + 1;
+  }
   const quick60 = [...q].slice(0, 90);
 
   const topPerSec = new Set(SECTIONS.flatMap((sec) => all.filter((x) => x.section === sec.id).slice(0, 30).map((x) => x.id)));
