@@ -153,6 +153,17 @@ async function loadFeed(url) {
 }
 
 // ---------- clustering and ranking ----------
+// how worth-reading a headline is for a busy reader (no AI needed)
+const LOW_VALUE = /\b(opinion|column|editorial|letters to|blog|horoscope|rashifal|tarot|quiz|how to|tips to|ways to|here'?s (why|how|what)|know all about|all you need|check (details|list|here)|full list|date,? time|where to watch|live streaming|in pics|photos:|watch:|reacts?|slams|lashes out|takes a dig|trolled|netizens|fans react|spotted|airport look|outfit|wishes|quotes|status|\d+ (best|ways|things|tips|places))\b/i;
+const HIGH_VALUE = /(₹|\$|rs\.? ?\d|\d+(\.\d+)? ?(crore|lakh|billion|million|%|per cent|percent)|\bfirst (time|ever)\b|\brecord\b|\bhike[sd]?\b|\bcut[s]?\b|\bprice[sd]?\b|\blaunch(es|ed)?\b|\bwins?\b|\bbeat[s]?\b|\bfinal\b|\bresigns?\b|\bbans?\b|\bapproves?\b|\bnew rule|\bdeadline\b|\bhistory\b|\bkilled\b|\bdies\b|\bstrike\b|\bverdict\b|\bcaught\b)/i;
+function quality(title, sectionId) {
+  let q = 1;
+  if (LOW_VALUE.test(title)) q *= 0.45;
+  if (HIGH_VALUE.test(title)) q *= 1.35;
+  if (/\?$/.test(title) && sectionId !== 'knowledge') q *= 0.8;
+  if (title.length > 140) q *= 0.85;
+  return q;
+}
 const BREAKING = /\b(breaking|killed|dead|dies|death toll|blast|explosion|attack|earthquake|flood|cyclone|crash|collapse|fire|war|missile|strike|ceasefire|resigns|arrested|verdict|rbi|repo rate|budget|gst|sensex crash|record high|alert|red alert|orange alert|heavy rain|shut|holiday|mega block|outage)\b/i;
 
 function clusterItems(items) {
@@ -251,7 +262,7 @@ function buildStory(c, section) {
   const isLocal = section.local && section.local.some((k) => titleLower.includes(k) || (lead.desc || '').toLowerCase().includes(k));
   const ageH = (NOW - newest) / 3.6e6;
   const n = pubs.length;
-  let score = (1 + Math.log2(n) * 2.2) * section.weight;
+  let score = (1 + Math.log2(n) * 2.2) * section.weight * quality(lead.title, section.id);
   score *= Math.exp(-ageH / (section.id === 'knowledge' ? 72 : 14));
   if (BREAKING.test(lead.title)) score *= 1.35;
   if (isLocal) score *= 1.5;
@@ -396,13 +407,38 @@ async function enrich(stories, cache) {
   }
 }
 
+// ---------- AI editor: pick the stories worth a busy reader's time ----------
+const EDITOR_PROMPT = (cands, lang = 'very simple, everyday English') => `You are the chief editor of a short-news app (like Inshorts) for one reader: Mehul, a sales professional in Malad, Mumbai, who has 10 minutes in the morning. His interests: Mumbai and Malad local news, India, world (Iran, Israel, US), markets, SIP and personal money, gold and fuel prices, phones and tech/AI, health, sports (mainly cricket), Bollywood and new films, spiritual.
+From the candidate stories below, pick the 30 he most needs or would most enjoy knowing today.
+Pick: big national and world events, anything that hits his wallet or daily life (prices, fuel, taxes, rules, trains, weather, civic news in Mumbai), clear market moves, notable launches, firsts and records, major sports results, big entertainment buzz, genuinely interesting science and tech.
+Skip: duplicates of the same event, political mud-slinging and rhetoric, opinion pieces, minor crime, celebrity gossip, how-to and listicles, vague or clickbait headlines.
+Order by importance, but keep variety (no more than 5 from one section).
+For each pick write, in ${lang}, using ONLY the facts given (never add facts or numbers):
+- "h": a crisp, specific headline of at most 12 words, like Inshorts ("CNG prices in Mumbai hiked for 2nd time in 15 days")
+- "t": a 50 to 60 word summary in 3 or 4 short sentences: what happened, key numbers, and why it matters.
+Return JSON only: [{"id":"...","h":"...","t":"..."}]
+
+CANDIDATES:
+${cands.map((s) => JSON.stringify({ id: s.id, section: s.section, outlets: s.n, title: s.title, summary: (s.summary || '').slice(0, 320) })).join('\n')}`;
+async function editorPick(all) {
+  if (!GEMINI_KEY) return null;
+  const cands = [...all].filter((s) => (s.summary || '').split(/\s+/).length >= 40).sort((a, b) => b.score - a.score).slice(0, 160);
+  const out = await gemini(EDITOR_PROMPT(cands), ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']);
+  if (!out) return null;
+  try {
+    const arr = JSON.parse(out.replace(/^```json|```$/g, '')).filter((x) => x.id && all.some((s) => s.id === x.id));
+    log(`editor picked ${arr.length}`);
+    return arr.length >= 10 ? arr : null;
+  } catch (e) { log('editor parse fail', e.message); return null; }
+}
+
 // ---------- summaries ----------
-async function gemini(prompt) {
-  for (const model of GEMINI_MODELS) {
+async function gemini(prompt, models = GEMINI_MODELS) {
+  for (const model of models) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.trim()}:generateContent?key=${GEMINI_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.25, responseMimeType: 'application/json' } })
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.25, responseMimeType: 'application/json', ...(/2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}) } })
       });
       if (r.status === 404) continue;
       if (!r.ok) { log('gemini', model, r.status, (await r.text()).slice(0, 200)); if (r.status === 429) return null; continue; }
@@ -568,7 +604,9 @@ async function main() {
 
   const [mk, vids] = await Promise.all([markets(prevMarkets), videos()]);
 
-  const news = { updated: NOW, sections, mustKnow, quick60, stories: all, factChecks: checks.slice(0, 15), videos: vids, stats: { feeds: feedStats.length, ok: feedStats.filter((f) => f.ok).length, items: sectionItems.flat().length } };
+  const brief = await editorPick(all);
+  if (brief) for (const x of brief) { const st = all.find((s) => s.id === x.id); if (st) { st.bh = x.h; st.bs = x.t; } }
+  const news = { updated: NOW, sections, mustKnow, quick60, brief: brief ? brief.map((x) => x.id) : null, stories: all, factChecks: checks.slice(0, 15), videos: vids, stats: { feeds: feedStats.length, ok: feedStats.filter((f) => f.ok).length, items: sectionItems.flat().length } };
 
   // Safety: never replace good data with an empty run
   if (all.length < 20 && prevNews?.stories?.length) { log('Too few stories this run, keeping previous news'); }

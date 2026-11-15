@@ -99,8 +99,16 @@ for (const k of Object.keys(S.simple)) if (Date.now() - (S.simple[k].at || 0) > 
 const LANG = () => S.settings.lang || 'en';
 const simpleOn = () => S.settings.simple !== false && !!S.settings.key;
 const simp = (s) => (simpleOn() ? S.simple[s.id + ':' + LANG()] : null);
-const H = (s) => simp(s)?.h || s.headline || s.title;
-const T = (s) => simp(s)?.t || s.summary || '';
+const H = (s) => simp(s)?.h || (LANG() === 'en' && s.bh) || s.headline || s.title;
+const T = (s) => simp(s)?.t || (LANG() === 'en' && s.bs) || s.summary || '';
+// the day's brief: chosen by the AI editor on the server, or on this phone with the user's key
+S.brief = LS.get('brief', null);
+function briefIds() {
+  const n = S.news; if (!n) return [];
+  if (n.brief?.length) return n.brief.filter((id) => S.byId[id]);
+  if (S.brief?.u === n.updated && S.brief.lang === LANG()) return S.brief.ids.filter((id) => S.byId[id]);
+  return [];
+}
 const DARK_THEMES = ['dark', 'midnight'];
 function applyTheme() { const d = document.documentElement; d.dataset.theme = S.settings.theme; d.dataset.mode = DARK_THEMES.includes(S.settings.theme) ? 'dark' : 'light'; d.dataset.accent = S.settings.accent || 'saffron'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = getComputedStyle(d).getPropertyValue('--bg').trim() || '#0D0E12'; }
 applyTheme();
@@ -223,14 +231,14 @@ function viewHome() {
   const top = `${header()}<div class="col gap4 mt8"><span class="eyebrow">${date}</span><h1 class="h1">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</h1></div><div class="row gap8 mt12" style="flex-wrap:wrap">${wx}</div>${mk ? `<div class="minis mt12">${mk}</div>` : ''}`;
   if (!n) return `${top}<div class="empty mt24">Fetching today’s news…</div>`;
   // top 5: must-know first, then the freshest well-confirmed stories; unread only
-  const pool5 = [...n.mustKnow.map((id) => S.byId[id]).filter(Boolean), ...n.stories.filter((s) => s.n >= 2).sort((a, b) => b.score - a.score)];
+  const pool5 = [...briefIds().map((id) => S.byId[id]), ...n.mustKnow.map((id) => S.byId[id]).filter(Boolean), ...n.stories.filter((s) => s.n >= 2).sort((a, b) => b.score - a.score)];
   const top5 = []; for (const s of pool5) { if (top5.length >= 5) break; if (!S.read.has(s.id) && !top5.includes(s)) top5.push(s); }
-  const q60 = unread(n.quick60.map((id) => S.byId[id]).filter(Boolean)).length;
+  const q60 = unread((briefIds().length ? briefIds() : n.quick60).map((id) => S.byId[id]).filter(Boolean)).length;
   const upd = new Date(n.updated).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
   const topics = DEFAULT_SECTIONS.map((id) => { const m = secMeta(id); const c = unread(secStories(id)).length; return `<a class="topic" href="${id === 'events' ? '#todo' : '#section/' + id}" style="background:${m.color};color:${m.tint}">${ic(m.icon, 18, 2)}<span>${esc(m.short)}</span>${c ? `<em>${c}</em>` : ''}</a>`; }).join('');
   const th = THOUGHTS[dayIndex() % THOUGHTS.length];
   return `${top}
-  <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${q60 ? 'Start your Quick 60' : 'Quick 60: all read'}</b><span class="small" style="opacity:.85">${q60 ? `${q60} stories · about ${Math.max(2, Math.round(q60 * 0.25))} min` : 'New stories arrive every 30 minutes'}</span></span>${ic('chev', 22, 2)}</a>
+  <a class="q60" href="#quick"><span class="ic">${ic('bolt', 22, 2)}</span><span class="col grow" style="gap:1px"><b>${q60 ? (briefIds().length ? 'Your brief is ready' : 'Start your Quick 60') : 'All caught up'}</b><span class="small" style="opacity:.85">${q60 ? `${q60} stories${briefIds().length ? ' picked for you' : ''} · about ${Math.max(2, Math.round(q60 * 0.25))} min` : 'New stories arrive every 30 minutes'}</span></span>${ic('chev', 22, 2)}</a>
   <div class="sec-head"><span class="h2">Top 5 right now</span><button class="xs muted row gap4" data-act="refresh" aria-label="Refresh news">${upd} ${ic('refresh', 14)}</button></div>
   ${top5.length ? `<div class="card" style="padding:2px 14px">${top5.map((s, i) => `<a class="mk" href="#read/${s.id}"><span class="num">${i + 1}</span><div class="col gap4 grow"><span class="ttl" data-sh="${s.id}">${esc(H(s))}</span><span class="meta"><span style="color:${secMeta(s.section).solid};font-weight:600">${esc(secMeta(s.section).short)}</span>· ${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${s.n} sources</span>` : ''}${s.breaking && s.n >= 3 ? ' · <span class="badge b-live">Breaking</span>' : ''}</span></div></a>`).join('')}</div>` : `<div class="caught">${ic('check', 20, 2.4)}You’re all caught up</div>`}
   ${(() => { const p = todoPicks('all')[0]; if (!p) return ''; const m = secMeta('events'); return `<a class="card row gap12 mt16" href="#todo" style="background:${m.color};border-color:transparent"><span class="sdot" style="width:44px;height:44px;border-radius:14px;background:var(--card);color:${m.tint}">${ic('ticket', 22, 2)}</span><span class="col grow" style="gap:2px"><b style="color:${m.tint}">Today in Mumbai</b><span class="small" style="color:var(--text)">${esc(p.n)}${p.cost ? '' : ' · free'}</span><span class="xs muted">${todoInfo().label} · tap for more ideas and events</span></span>${ic('chev', 20, 2)}</a>`; })()}
@@ -241,13 +249,14 @@ function viewHome() {
 }
 const header = () => `<div class="top"><div class="brand">${logo()}<b>Drishti</b></div><div class="row gap8"><button class="ibtn" data-act="refresh" aria-label="Refresh news" id="rfb">${ic('refresh')}</button><a class="ibtn" href="#search" aria-label="Search">${ic('search')}</a><a class="ibtn" href="#settings" aria-label="Settings">${ic('settings')}</a></div></div>`;
 
-const FEED_TABS = [['all', 'My feed'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['knowledge', 'Knowledge'], ['events', 'Things to do'], ['markets', 'Markets'], ['money', 'SIP and MF'], ['gold', 'Gold'], ['health', 'Health'], ['sports', 'Sports'], ['gadgets', 'Tech'], ['phones', 'Phones'], ['bollywood', 'Bollywood'], ['movies', 'Movies'], ['viral', 'Viral'], ['spiritual', 'Spiritual']];
+const FEED_TABS = [['all', 'My brief'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['knowledge', 'Knowledge'], ['events', 'Things to do'], ['markets', 'Markets'], ['money', 'SIP and MF'], ['gold', 'Gold'], ['health', 'Health'], ['sports', 'Sports'], ['gadgets', 'Tech'], ['phones', 'Phones'], ['bollywood', 'Bollywood'], ['movies', 'Movies'], ['viral', 'Viral'], ['spiritual', 'Spiritual']];
 const hasBody = (s) => (s.summary || '').length > 90;
 function viewQuick(tab = 'all') {
   const n = S.news; if (!n) return `<div class="empty">Loading…</div>`;
   // read stories leave the feed (they live in Read history); the list is fixed when the feed opens
-  let list = tab === 'all' ? n.quick60.map((id) => S.byId[id]).filter(Boolean) : secStories(tab);
-  if (tab === 'all') { const more = n.stories.filter((s) => hasBody(s) && !n.quick60.includes(s.id)).sort((a, b) => b.score - a.score); list = list.concat(more); }
+  const bIds = briefIds();
+  let list = tab === 'all' ? (bIds.length ? bIds : n.quick60).map((id) => S.byId[id]).filter(Boolean) : secStories(tab);
+  if (tab === 'all' && !bIds.length) { const more = n.stories.filter((s) => hasBody(s) && !n.quick60.includes(s.id)).sort((a, b) => b.score - a.score); list = list.concat(more); }
   list = unread(list);
   const full = list.filter(hasBody); if (full.length >= 3) list = full;
   list = list.slice(0, 80);
@@ -418,13 +427,50 @@ function simpStatus(msg) {
   if (!el) { el = document.createElement('div'); el.id = 'simpst'; el.className = 'simpst'; document.body.appendChild(el); }
   el.innerHTML = msg;
 }
+const EDITOR_LANG = { en: 'very simple, everyday English', hinglish: 'simple Hinglish (Hindi in English letters, mixed with common English words)', hi: 'simple everyday Hindi in Devanagari script' };
+let editorBusy = false;
+async function clientEditor() {
+  const n = S.news;
+  if (!n || n.brief?.length || !S.settings.key || editorBusy) return;
+  if (S.brief?.u === n.updated && S.brief.lang === LANG()) return;
+  editorBusy = true; simpStatus(`${ic('sparkle', 14)} Picking today’s best stories…`);
+  try {
+    const cands = n.stories.filter((s) => (s.summary || '').split(/\s+/).length >= 40).sort((a, b) => b.score - a.score).slice(0, 150);
+    const prompt = `You are the chief editor of a short-news app (like Inshorts) for one reader: ${S.settings.name || 'the reader'}, a working professional in Malad, Mumbai, who has 10 minutes in the morning. Interests: Mumbai and Malad local news, India, world (Iran, Israel, US), markets, SIP and personal money, gold and fuel prices, phones and tech/AI, health, sports (mainly cricket), Bollywood and new films, spiritual.
+From the candidates below pick the 30 he most needs or would most enjoy knowing today.
+Pick: big national and world events, anything that hits his wallet or daily life (prices, fuel, taxes, rules, trains, weather, civic news in Mumbai), clear market moves, notable launches, firsts and records, major sports results, big entertainment buzz, genuinely interesting science and tech.
+Skip: duplicates of the same event, political mud-slinging and rhetoric, opinion pieces, minor crime, celebrity gossip, how-to and listicles, vague or clickbait headlines.
+Order by importance, with variety (no more than 5 from one section).
+For each pick write in ${EDITOR_LANG[LANG()]}, using ONLY the facts given (never add facts or numbers):
+"h": crisp, specific headline, at most 12 words, like Inshorts ("CNG prices in Mumbai hiked for 2nd time in 15 days")
+"t": 50 to 60 word summary in 3 or 4 short sentences: what happened, key numbers, why it matters.
+Return JSON only: [{"id":"...","h":"...","t":"..."}]
+
+CANDIDATES:
+${cands.map((s) => JSON.stringify({ id: s.id, section: s.section, outlets: s.n, title: s.title, summary: (s.summary || '').slice(0, 300) })).join('\n')}`;
+    const arr = JSON.parse((await gem(prompt)).replace(/^```json|```$/g, '')).filter((x) => x.id && S.byId[x.id]);
+    if (arr.length >= 10) {
+      for (const x of arr) if (x.h && x.t) S.simple[x.id + ':' + LANG()] = { h: x.h, t: x.t, at: Date.now() };
+      LS.set('simple', S.simple);
+      S.brief = { u: n.updated, lang: LANG(), ids: arr.map((x) => x.id) }; LS.set('brief', S.brief);
+      const [r] = route(); const qw = $('#qw');
+      if (r === 'home' || r === '' || (r === 'quick' && (!qw || qw.scrollTop < 50))) render();
+    }
+    simpStatus('');
+  } catch (e) {
+    simpStatus(e.message === 'limit' ? 'Google’s free AI limit reached, picking again shortly' : '');
+    setTimeout(() => simpStatus(''), 4000);
+    if (e.message === 'limit') setTimeout(() => { editorBusy = false; clientEditor(); }, 60000);
+  }
+  editorBusy = false;
+}
 let simpBusy = false, simpRetry = null;
 async function simplifyVisible() {
   if (!simpleOn() || simpBusy) return;
   // stories on screen first, then the ones just below
   const els = [...document.querySelectorAll('[data-sh]')].map((e) => { const r = e.getBoundingClientRect(); return { id: e.dataset.sh, d: r.top < 0 ? 5000 - r.top : r.top }; }).sort((a, b) => a.d - b.d);
   const ids = [...new Set(els.map((e) => e.id))];
-  const todo = ids.map((id) => S.byId[id]).filter((s) => s && !simp(s)).slice(0, 8);
+  const todo = ids.map((id) => S.byId[id]).filter((s) => s && !simp(s) && !(LANG() === 'en' && s.bh)).slice(0, 8);
   if (!todo.length) { simpStatus(''); return; }
   simpBusy = true; simpStatus(`${ic('sparkle', 14)} Making it simple…`);
   try {
@@ -822,7 +868,7 @@ function render() {
   if (!['story', 'read', 'web'].includes(r)) S.lastTab = tab;
   v.className = r === 'quick' ? 'full' : '';
   v.innerHTML = html;
-  setTimeout(simplifyVisible, 300);
+  setTimeout(() => { clientEditor().then(simplifyVisible); }, 300);
   $('#navwrap').innerHTML = r === 'quick' ? '' : navHtml(tab || 'home');
 }
 let lastHash = '';
