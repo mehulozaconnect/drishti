@@ -1,12 +1,14 @@
 name: Update news
 
+# GitHub often delays or skips scheduled runs, so each run keeps itself alive for about 5.5 hours
+# and refreshes the news every 30 minutes. The hourly schedule just restarts it when it ends.
 on:
   schedule:
-    - cron: '7,37 * * * *'
+    - cron: '7 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['scripts/**', '.github/workflows/**']
+    paths: ['.github/workflows/**']
 
 permissions:
   contents: write
@@ -19,7 +21,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,28 +33,31 @@ jobs:
           path: .cache
           key: drishti-cache5-${{ github.run_id }}
           restore-keys: drishti-cache5-
-      - name: Fetch news and markets
+      - name: Fetch news every 30 minutes
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-        run: node scripts/fetch.mjs
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "drishti-bot"
+          git config user.email "drishti-bot@users.noreply.github.com"
+          for i in $(seq 1 11); do
+            start=$(date +%s)
+            git pull -q --rebase || true
+            npm install --omit=dev --silent || true
+            node scripts/fetch.mjs || echo "fetch failed, will retry next round"
+            git add data
+            if ! git diff --cached --quiet; then
+              git commit -q -m "News update $(date -u +%H:%M) UTC"
+              for t in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
+              gh api -X POST repos/${{ github.repository }}/pages/builds >/dev/null 2>&1 || true
+            fi
+            [ "$i" -lt 11 ] && sleep $(( 1800 - ( $(date +%s) - start ) > 60 ? 1800 - ( $(date +%s) - start ) : 60 ))
+          done
       - uses: actions/cache/save@v4
         if: always()
         with:
           path: .cache
           key: drishti-cache5-${{ github.run_id }}
-      - name: Save data
-        run: |
-          git config user.name "drishti-bot"
-          git config user.email "drishti-bot@users.noreply.github.com"
-          git add data
-          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
-          git commit -m "News update $(date -u +%H:%M) UTC" -q
-          for i in 1 2 3; do git pull --rebase -q && git push -q && break; sleep 5; done
-      - name: Refresh the live site
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api -X POST repos/${{ github.repository }}/pages/builds >/dev/null 2>&1 || echo "Pages not enabled yet"
