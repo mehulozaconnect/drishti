@@ -277,7 +277,7 @@ function setupQuick(start, total, tab) {
   const io = new IntersectionObserver((ents) => ents.forEach((e) => {
     if (e.isIntersecting && e.intersectionRatio > 0.6) {
       const i = Number(e.target.dataset.i); const id = e.target.dataset.id;
-      if (id) { markRead(id); $('#qc').textContent = `${i + 1}/${total}`; $('#qp').style.width = ((i + 1) / total) * 100 + '%'; }
+      if (id) { simplifyVisible(); markRead(id); $('#qc').textContent = `${i + 1}/${total}`; $('#qp').style.width = ((i + 1) / total) * 100 + '%'; }
       else { $('#qp').style.width = '100%'; }
     }
   }), { root: w, threshold: [0.6] });
@@ -394,24 +394,39 @@ function viewVideos() {
 
 
 const LANG_NAME = { en: 'very simple, everyday English (like explaining to a friend; short sentences; no jargon, and if a hard word is needed, explain it in brackets)', hinglish: 'simple Hinglish (Hindi written in English letters mixed with common English words, the way people chat on WhatsApp in Mumbai)', hi: 'simple, everyday Hindi in Devanagari script (avoid difficult Sanskrit words)' };
+// rewriting uses the fast, high-limit model first; if one model is busy or at its limit, try the next
 async function gem(prompt, json = true) {
-  const models = [S.settings.model, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'].filter((v, i, a) => v && a.indexOf(v) === i);
+  const models = ['gemini-2.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash', S.settings.model].filter((v, i, a) => v && a.indexOf(v) === i);
+  let limited = false;
   for (const model of models) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(S.settings.key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, ...(json ? { responseMimeType: 'application/json' } : {}) } }) });
-    if (r.status === 429) throw new Error('limit');
+    const cfg = { temperature: 0.3, ...(json ? { responseMimeType: 'application/json' } : {}) };
+    if (/2\.5/.test(model)) cfg.thinkingConfig = { thinkingBudget: 0 };
+    let r;
+    try { r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(S.settings.key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: cfg }) }); }
+    catch { throw new Error('offline'); }
+    if (r.status === 429 || r.status === 503) { limited = true; continue; }
     if (!r.ok) continue;
     const j = await r.json();
-    return j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+    const t = j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+    if (t) return t;
   }
-  throw new Error('no model');
+  throw new Error(limited ? 'limit' : 'no model');
 }
-let simpBusy = false;
+function simpStatus(msg) {
+  let el = $('#simpst');
+  if (!msg) { el?.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'simpst'; el.className = 'simpst'; document.body.appendChild(el); }
+  el.innerHTML = msg;
+}
+let simpBusy = false, simpRetry = null;
 async function simplifyVisible() {
   if (!simpleOn() || simpBusy) return;
-  const ids = [...new Set([...document.querySelectorAll('[data-sh]')].map((e) => e.dataset.sh))];
-  const todo = ids.map((id) => S.byId[id]).filter((s) => s && !simp(s)).slice(0, 10);
-  if (!todo.length) return;
-  simpBusy = true;
+  // stories on screen first, then the ones just below
+  const els = [...document.querySelectorAll('[data-sh]')].map((e) => { const r = e.getBoundingClientRect(); return { id: e.dataset.sh, d: r.top < 0 ? 5000 - r.top : r.top }; }).sort((a, b) => a.d - b.d);
+  const ids = [...new Set(els.map((e) => e.id))];
+  const todo = ids.map((id) => S.byId[id]).filter((s) => s && !simp(s)).slice(0, 8);
+  if (!todo.length) { simpStatus(''); return; }
+  simpBusy = true; simpStatus(`${ic('sparkle', 14)} Making it simple…`);
   try {
     const out = await gem(`Rewrite each news item below in ${LANG_NAME[LANG()]}. The reader is busy and wants to understand it in one quick read.
 Rules: keep every fact exactly as given, do not add anything new; headline max 10 words; summary 40 to 60 words in 3 or 4 short sentences; say what happened, then why it matters to an ordinary person in India.
@@ -425,9 +440,15 @@ ${todo.map((s) => JSON.stringify({ id: s.id, headline: s.headline || s.title, su
       document.querySelectorAll(`[data-ss="${x.id}"]`).forEach((e) => { e.textContent = x.t; });
     }
     LS.set('simple', S.simple);
-  } catch (e) { console.warn('simplify', e.message); simpBusy = false; return; }
-  simpBusy = false;
-  setTimeout(simplifyVisible, 1500); // next batch, gently
+  } catch (e) {
+    simpBusy = false; console.warn('simplify', e.message);
+    const wait = e.message === 'limit' ? 40 : 15;
+    simpStatus(e.message === 'limit' ? `Google’s free AI limit reached, trying again in ${wait}s` : e.message === 'offline' ? 'No internet for simple words' : 'Simple words will retry shortly');
+    clearTimeout(simpRetry); simpRetry = setTimeout(() => { simpStatus(''); simplifyVisible(); }, wait * 1000);
+    return;
+  }
+  simpBusy = false; simpStatus('');
+  setTimeout(simplifyVisible, 1200); // next batch
 }
 async function explainSimply(s, articleText) {
   const box = $('#explain'); if (!box || !simpleOn()) return;
@@ -448,7 +469,7 @@ Summary: ${s.summary}
 Article: ${(articleText || '').slice(0, 5000)}`, false);
     S.simple[key] = { t: out.trim(), at: Date.now() }; LS.set('simple', S.simple);
     show(md(out.trim()));
-  } catch (e) { if ($('#explain') === box) box.innerHTML = ''; }
+  } catch (e) { if ($('#explain') === box) { if (e.message === 'limit') { box.innerHTML = `<p class="xs muted mt12">Simple explanation paused: Google’s free AI limit was reached. Retrying in 40 seconds…</p>`; setTimeout(() => { if ($('#explain') === box) explainSimply(s, articleText); }, 40000); } else box.innerHTML = ''; } }
 }
 
 // ---------- in-app reader ----------
@@ -850,6 +871,7 @@ document.addEventListener('submit', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && e.target.matches('.askbar textarea')) { e.preventDefault(); e.target.form.requestSubmit(); } });
 document.addEventListener('change', (e) => { const k = e.target.dataset?.set; if (!k) return; S.settings[k] = e.target.value.trim(); saveSettings(); if (k === 'key') toast('Key saved'); });
+let scrollT; window.addEventListener('scroll', () => { clearTimeout(scrollT); scrollT = setTimeout(simplifyVisible, 400); }, { passive: true });
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.installEvt = e; });
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && S.news && Date.now() - S.news.updated > 25 * 6e4 && !location.hash.startsWith('#quick') && !location.hash.startsWith('#ask')) { await loadData(true); render(); }
