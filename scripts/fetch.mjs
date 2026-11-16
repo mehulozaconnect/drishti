@@ -5,7 +5,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { TRUSTED, SECTIONS, FACTCHECK_FEEDS } from './sources.mjs';
+import { TRUSTED, SECTIONS, FACTCHECK_FEEDS, TOP_FEED } from './sources.mjs';
 
 const DATA = new URL('../data/', import.meta.url);
 const CACHE = new URL('../.cache/', import.meta.url); // kept between runs by actions/cache, not committed
@@ -266,6 +266,8 @@ function buildStory(c, section) {
   score *= Math.exp(-ageH / (section.id === 'knowledge' ? 72 : 14));
   if (BREAKING.test(lead.title)) score *= ageH < 3 ? 2.2 : ageH < 8 ? 1.6 : 1.35; // fresh breaking news jumps to the top
   if (isLocal) score *= 1.5;
+  const trending = c.items.some((i) => i.top);
+  if (trending) score *= 1.8; // Google News editors also rate it a top story today
   return {
     id: hash(section.id + '|' + [...tokens(lead.title)].sort().join(' ')),
     section: section.id,
@@ -280,6 +282,7 @@ function buildStory(c, section) {
     links: c.items.map((i) => i.link).filter((l) => !l.includes('news.google.com')).slice(0, 3),
     glinks: c.items.map((i) => i.link).filter((l) => l.includes('news.google.com')).slice(0, 3),
     local: !!isLocal,
+    trending,
     breaking: BREAKING.test(lead.title) && ageH < 6,
     score: Math.round(score * 1000) / 1000
   };
@@ -548,7 +551,7 @@ async function main() {
   const state = await readJson('state.json', { alerted: [], briefDate: '' }, CACHE);
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
-    const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i) => ({ ...i, origin: sec.id, google: u.includes('news.google.com') }))));
+    const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i) => ({ ...i, origin: sec.id, google: u.includes('news.google.com'), top: u.includes(TOP_FEED) || u === 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' }))));
     const maxAge = sec.id === 'knowledge' || sec.id === 'events' ? 168 : (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
     return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title) && (!sec.exclude || !sec.exclude.test(i.title)));
   }));
@@ -604,9 +607,10 @@ async function main() {
   { const bad = new Set(toSummarise.filter((x) => cache[x.id]?.bad || COMMENTS.test(x.link)).map((x) => x.id)); if (bad.size) { all = all.filter((x) => !bad.has(x.id)); log('dropped comment-page stories', bad.size); } }
   await summarise(toSummarise, cache);
   for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; s.summary = stripTitle(s.summary, s.title); delete s.desc; delete s.alt; delete s.body; delete s.links; delete s.glinks; }
-  const dropped = all.filter((s) => (s.summary || '').split(/\s+/).length < (s.section === 'events' ? 25 : 40)).map((s) => ({ t: s.title, sec: s.section, n: s.n, score: s.score, words: (s.summary || '').split(/\s+/).filter(Boolean).length }));
+  const enough = (s) => { const w = (s.summary || '').split(/\s+/).filter(Boolean).length; return w >= (s.section === 'events' ? 25 : 40) || (w >= 20 && (s.n >= 3 || s.trending)); };
+  const dropped = all.filter((s) => !enough(s)).map((s) => ({ t: s.title, sec: s.section, n: s.n, score: s.score, words: (s.summary || '').split(/\s+/).filter(Boolean).length }));
   await writeJson('debug.json', { at: NOW, dropped: dropped.sort((a, b) => b.score - a.score).slice(0, 150), allTitles: clusters.length });
-  { const before = all.length; all = all.filter((s) => (s.summary || '').split(/\s+/).length >= (s.section === 'events' ? 25 : 40)); log(`kept ${all.length} of ${before} stories with a full summary`); }
+  { const before = all.length; all = all.filter(enough); log(`kept ${all.length} of ${before} stories with a full summary`); }
   for (const sec of sections) sec.count = all.filter((x) => x.section === sec.id).length;
   { const ids = new Set(all.map((x) => x.id)); for (let i = mustKnow.length - 1; i >= 0; i--) if (!ids.has(mustKnow[i])) mustKnow.splice(i, 1); for (let i = quick60.length - 1; i >= 0; i--) if (!ids.has(quick60[i])) quick60.splice(i, 1); }
 

@@ -88,6 +88,9 @@ export const TRUSTED = {
   'lokmat.com': 'Lokmat'
 };
 
+// Google News editors' own top stories per topic: used as a strong 'this matters today' signal
+const top = (topic) => topic ? `https://news.google.com/rss/headlines/section/topic/${topic}?hl=en-IN&gl=IN&ceid=IN:en` : 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en';
+export const TOP_FEED = 'news.google.com/rss/headlines/section/topic';
 const g = (q, days = 2) => `https://news.google.com/rss/search?q=${encodeURIComponent(q + ' when:' + days + 'd')}&hl=en-IN&gl=IN&ceid=IN:en`;
 
 export const SECTIONS = [
@@ -113,6 +116,7 @@ export const SECTIONS = [
   {
     id: 'india', name: 'India', short: 'India', color: '#3A2A12', tint: '#FFC48A', icon: 'flag', weight: 1.1,
     feeds: [
+      top(), top('NATION'),
       'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',
       'https://www.freepressjournal.in/stories.rss?section=india',
       'https://www.thehindu.com/news/national/feeder/default.rss',
@@ -125,6 +129,7 @@ export const SECTIONS = [
   {
     id: 'world', name: 'World', short: 'World', color: '#12203D', tint: '#9DB8F5', icon: 'globe', weight: 1.1,
     feeds: [
+      top('WORLD'), g('Russia Ukraine'), g('Pakistan army OR Balochistan OR Afghanistan'), g('China OR Taiwan OR Japan'), g('site:reuters.com'),
       'https://feeds.bbci.co.uk/news/world/rss.xml',
       'https://www.freepressjournal.in/stories.rss?section=world',
       'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml',
@@ -140,6 +145,7 @@ export const SECTIONS = [
   {
     id: 'markets', name: 'Markets and economy', short: 'Markets', color: '#221A3F', tint: '#C7BAFF', icon: 'chart', weight: 1.15,
     feeds: [
+      top('BUSINESS'),
       'https://www.livemint.com/rss/markets',
       'https://www.freepressjournal.in/stories.rss?section=business',
       'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
@@ -171,6 +177,7 @@ export const SECTIONS = [
   {
     id: 'bollywood', name: 'Bollywood', short: 'Bollywood', color: '#4A1530', tint: '#FF9CC6', icon: 'star', weight: 0.85,
     feeds: [
+      top('ENTERTAINMENT'),
       'https://www.hindustantimes.com/feeds/rss/entertainment/bollywood/rssfeed.xml',
       'https://www.freepressjournal.in/stories.rss?section=entertainment',
       g('site:indianexpress.com Bollywood'),
@@ -208,6 +215,7 @@ export const SECTIONS = [
   {
     id: 'gadgets', name: 'Technology', short: 'Tech', color: '#16262B', tint: '#7FE3E0', icon: 'chip', weight: 0.75,
     feeds: [
+      top('TECHNOLOGY'),
       'https://www.theverge.com/rss/index.xml',
       'https://www.freepressjournal.in/stories.rss?section=tech',
       'https://www.engadget.com/rss.xml',
@@ -221,6 +229,7 @@ export const SECTIONS = [
     id: 'health', name: 'Health and lifestyle', short: 'Health',
     exclude: /(organis|best deals?|buy now|shopping|on sale|discount|amazon|flipkart|wishes|greetings|quotes|messages|shayari|horoscope|outfit|celebrity look|red carpet)/i, color: '#143A26', tint: '#7BF0B4', icon: 'pulse', weight: 0.95,
     feeds: [
+      top('HEALTH'),
       'https://www.who.int/rss-feeds/news-english.xml',
       'https://www.freepressjournal.in/stories.rss?section=lifestyle',
       'https://feeds.bbci.co.uk/news/health/rss.xml',
@@ -244,6 +253,7 @@ export const SECTIONS = [
     id: 'sports', name: 'Sports', short: 'Sports',
     exclude: /(live streaming|live telecast|where to watch|dream11|fantasy|prediction)/i, color: '#16301A', tint: '#9BE38F', icon: 'trophy', weight: 0.85,
     feeds: [
+      top('SPORTS'),
       'https://www.espncricinfo.com/rss/content/story/feeds/0.xml',
       'https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml',
       'https://www.hindustantimes.com/feeds/rss/sports/rssfeed.xml',
@@ -260,6 +270,7 @@ export const SECTIONS = [
     id: 'knowledge', name: 'Knowledge', short: 'Knowledge', color: '#1E2A44', tint: '#A9C4FF', icon: 'bulb', weight: 0.7,
     require: /(explained|explainer|\| explained|what we know|decoded|in charts|in numbers|need to know|everything you need|^(why|how|what|who|when|where|which|is|are|can|should|does|do)\b[^:]{8,}\?|^(why|how|what|who)\b.{10,}(work|works|matters|happened|means|changed|began|started|unfolded))/i,
     feeds: [
+      top('SCIENCE'),
       g('site:indianexpress.com explained'),
       g('site:thehindu.com explained'),
       g('site:timesofindia.indiatimes.com explained OR "explained:"'),
