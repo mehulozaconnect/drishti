@@ -154,7 +154,7 @@ async function loadFeed(url) {
 
 // ---------- clustering and ranking ----------
 // how worth-reading a headline is for a busy reader (no AI needed)
-const LOW_VALUE = /\b(opinion|column|editorial|letters to|blog|horoscope|rashifal|tarot|quiz|how to|tips to|ways to|here'?s (why|how|what)|know all about|all you need|check (details|list|here)|full list|date,? time|where to watch|live streaming|in pics|photos:|watch:|reacts?|slams|lashes out|takes a dig|trolled|netizens|fans react|spotted|airport look|outfit|wishes|quotes|status|\d+ (best|ways|things|tips|places))\b/i;
+const LOW_VALUE = /\b(beats? (her|his|wife|son|daughter)|stray|dog bite|liquor|drunk|eve-?teas\w*|youth held|man held|woman held|opinion|column|editorial|letters to|blog|horoscope|rashifal|tarot|quiz|how to|tips to|ways to|here'?s (why|how|what)|know all about|all you need|check (details|list|here)|full list|date,? time|where to watch|live streaming|in pics|photos:|watch:|reacts?|slams|lashes out|takes a dig|trolled|netizens|fans react|spotted|airport look|outfit|wishes|quotes|status|\d+ (best|ways|things|tips|places))\b/i;
 const HIGH_VALUE = /(₹|\$|rs\.? ?\d|\d+(\.\d+)? ?(crore|lakh|billion|million|%|per cent|percent)|\bfirst (time|ever)\b|\brecord\b|\bhike[sd]?\b|\bcut[s]?\b|\bprice[sd]?\b|\blaunch(es|ed)?\b|\bwins?\b|\bbeat[s]?\b|\bfinal\b|\bresigns?\b|\bbans?\b|\bapproves?\b|\bnew rule|\bdeadline\b|\bhistory\b|\bkilled\b|\bdies\b|\bstrike\b|\bverdict\b|\bcaught\b)/i;
 function quality(title, sectionId) {
   let q = 1;
@@ -164,7 +164,7 @@ function quality(title, sectionId) {
   if (title.length > 140) q *= 0.85;
   return q;
 }
-const BREAKING = /\b(breaking|bomb\w*|drone strikes?|airstrikes?|shelling|invad\w*|coup|assassinat\w*|killed|dead|dies|death toll|blast|explosion|attack\w*|earthquake|flood|cyclone|crash|collapse|fire|war|missile|strike|ceasefire|resigns|arrested|verdict|rbi|repo rate|budget|gst|sensex crash|record high|alert|red alert|orange alert|heavy rain|shut|holiday|mega block|outage)\b/i;
+const BREAKING = /\b(breaking|barrage|hits|struck|bridge|nuclear|war|bomb\w*|drone strikes?|airstrikes?|shelling|invad\w*|coup|assassinat\w*|killed|dead|dies|death toll|blast|explosion|attack\w*|earthquake|flood|cyclone|crash|collapse|fire|war|missile|strike|ceasefire|resigns|arrested|verdict|rbi|repo rate|budget|gst|sensex crash|record high|alert|red alert|orange alert|heavy rain|shut|holiday|mega block|outage)\b/i;
 
 function clusterItems(items) {
   items.sort((a, b) => b.time - a.time);
@@ -376,7 +376,7 @@ async function pool(items, n, fn) { const q = [...items]; await Promise.all(Arra
 async function enrich(stories, cache) {
   const need = stories.filter((s) => !(cache[s.id]?.text != null && (cache[s.id].img || s.image)));
   let ok = 0, dec = 0;
-  await pool(need, 8, async (s) => {
+  await pool(need, 16, async (s) => {
     const c = cache[s.id] ||= { n: 0, at: NOW };
     const direct = [...new Set([...(s.link.includes('news.google.com') ? [] : [s.link]), ...(s.links || [])])];
     const tryUrl = async (u) => {
