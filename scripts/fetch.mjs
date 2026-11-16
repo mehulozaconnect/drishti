@@ -604,6 +604,8 @@ async function main() {
   { const bad = new Set(toSummarise.filter((x) => cache[x.id]?.bad || COMMENTS.test(x.link)).map((x) => x.id)); if (bad.size) { all = all.filter((x) => !bad.has(x.id)); log('dropped comment-page stories', bad.size); } }
   await summarise(toSummarise, cache);
   for (const s of all) { if (!s.summary) s.summary = s.desc ? extractive('', s.desc) : ''; s.summary = stripTitle(s.summary, s.title); delete s.desc; delete s.alt; delete s.body; delete s.links; delete s.glinks; }
+  const dropped = all.filter((s) => (s.summary || '').split(/\s+/).length < (s.section === 'events' ? 25 : 40)).map((s) => ({ t: s.title, sec: s.section, n: s.n, score: s.score, words: (s.summary || '').split(/\s+/).filter(Boolean).length }));
+  await writeJson('debug.json', { at: NOW, dropped: dropped.sort((a, b) => b.score - a.score).slice(0, 150), allTitles: clusters.length });
   { const before = all.length; all = all.filter((s) => (s.summary || '').split(/\s+/).length >= (s.section === 'events' ? 25 : 40)); log(`kept ${all.length} of ${before} stories with a full summary`); }
   for (const sec of sections) sec.count = all.filter((x) => x.section === sec.id).length;
   { const ids = new Set(all.map((x) => x.id)); for (let i = mustKnow.length - 1; i >= 0; i--) if (!ids.has(mustKnow[i])) mustKnow.splice(i, 1); for (let i = quick60.length - 1; i >= 0; i--) if (!ids.has(quick60[i])) quick60.splice(i, 1); }
