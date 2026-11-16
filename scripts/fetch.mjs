@@ -164,7 +164,7 @@ function quality(title, sectionId) {
   if (title.length > 140) q *= 0.85;
   return q;
 }
-const BREAKING = /\b(breaking|killed|dead|dies|death toll|blast|explosion|attack|earthquake|flood|cyclone|crash|collapse|fire|war|missile|strike|ceasefire|resigns|arrested|verdict|rbi|repo rate|budget|gst|sensex crash|record high|alert|red alert|orange alert|heavy rain|shut|holiday|mega block|outage)\b/i;
+const BREAKING = /\b(breaking|bomb\w*|drone strikes?|airstrikes?|shelling|invad\w*|coup|assassinat\w*|killed|dead|dies|death toll|blast|explosion|attack\w*|earthquake|flood|cyclone|crash|collapse|fire|war|missile|strike|ceasefire|resigns|arrested|verdict|rbi|repo rate|budget|gst|sensex crash|record high|alert|red alert|orange alert|heavy rain|shut|holiday|mega block|outage)\b/i;
 
 function clusterItems(items) {
   items.sort((a, b) => b.time - a.time);
@@ -264,7 +264,7 @@ function buildStory(c, section) {
   const n = pubs.length;
   let score = (1 + Math.log2(n) * 2.2) * section.weight * quality(lead.title, section.id);
   score *= Math.exp(-ageH / (section.id === 'knowledge' ? 72 : 14));
-  if (BREAKING.test(lead.title)) score *= 1.35;
+  if (BREAKING.test(lead.title)) score *= ageH < 3 ? 2.2 : ageH < 8 ? 1.6 : 1.35; // fresh breaking news jumps to the top
   if (isLocal) score *= 1.5;
   return {
     id: hash(section.id + '|' + [...tokens(lead.title)].sort().join(' ')),

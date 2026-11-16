@@ -1,7 +1,7 @@
 name: Update news
 
-# GitHub often delays or skips scheduled runs, so each run keeps itself alive for about 5.5 hours
-# and refreshes the news every 30 minutes. The hourly schedule just restarts it when it ends.
+# GitHub often delays or skips scheduled runs, so each run keeps itself alive for about 5.5 hours,
+# refreshes the news every 15 minutes, then starts the next run itself. The hourly schedule is only a backup.
 on:
   schedule:
     - cron: '7 * * * *'
@@ -13,6 +13,7 @@ on:
 permissions:
   contents: write
   pages: write
+  actions: write
 
 concurrency:
   group: update-news
@@ -43,7 +44,7 @@ jobs:
         run: |
           git config user.name "drishti-bot"
           git config user.email "drishti-bot@users.noreply.github.com"
-          for i in $(seq 1 11); do
+          for i in $(seq 1 21); do
             start=$(date +%s)
             git pull -q --rebase || true
             npm install --omit=dev --silent || true
@@ -54,10 +55,16 @@ jobs:
               for t in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
               gh api -X POST repos/${{ github.repository }}/pages/builds >/dev/null 2>&1 || true
             fi
-            [ "$i" -lt 11 ] && sleep $(( 1800 - ( $(date +%s) - start ) > 60 ? 1800 - ( $(date +%s) - start ) : 60 ))
+            if [ "$i" -lt 21 ]; then left=$(( 900 - ( $(date +%s) - start ) )); [ "$left" -lt 60 ] && left=60; sleep "$left"; fi
           done
+          true
       - uses: actions/cache/save@v4
         if: always()
         with:
           path: .cache
           key: drishti-cache5-${{ github.run_id }}
+      - name: Start the next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run update.yml -R ${{ github.repository }} || true
