@@ -623,8 +623,8 @@ async function main() {
 
   // Front page: led by what Google News' editors rank as India's top stories right now, then our must-know
   const front = [];
-  { const fresh = all.filter((x) => x.rank != null && NOW - x.time < 20 * 3.6e6 && !['events', 'knowledge', 'viral'].includes(x.section));
-    const order = [...fresh.sort((a, b) => a.rank - b.rank || b.score - a.score), ...mustKnow.map((id) => all.find((x) => x.id === id)).filter(Boolean)];
+  { const fresh = all.filter((x) => x.rank != null && (x.rank < 25 || (x.rank < 29 && x.n >= 2)) && NOW - x.time < 20 * 3.6e6 && !['events', 'knowledge', 'viral', 'spiritual', 'movies'].includes(x.section));
+    const ranked = fresh.sort((a, b) => a.rank - b.rank || b.score - a.score); const order = [...ranked.slice(0, 9), ...mustKnow.slice(0, 4).map((id) => all.find((x) => x.id === id)).filter(Boolean), ...ranked.slice(9), ...mustKnow.map((id) => all.find((x) => x.id === id)).filter(Boolean)];
     for (const st of order) { if (front.length >= 14) break; if (front.includes(st.id)) continue; if (front.some((id) => similar(tokens(all.find((x) => x.id === id).title), tokens(st.title)) >= 0.25)) continue; front.push(st.id); } }
   const brief = await editorPick(all);
   if (brief) for (const x of brief) { const st = all.find((s) => s.id === x.id); if (st) { st.bh = x.h; st.bs = x.t; } }
