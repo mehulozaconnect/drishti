@@ -1,7 +1,7 @@
 import { THOUGHTS, TIPS, GUIDE, LEARN } from './content.js';
 import { CALCS, inr, dur, monthsToGoal, sipForGoal, fvSip } from './grow.js';
 import { PLACES, COST, COST_HINT } from './todo.js';
-import { PAPERS, today, loadPapers, removePaper, pageUrl, getPaper, markPaperRead, addPaper, resumePaper, isBusy } from './paper.js';
+import { PAPERS, today, loadPapers, removePaper, pageUrl, getPaper, markPaperRead, addPaper, resumePaper, isBusy, ensureBody } from './paper.js';
 
 // ---------- small helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -1010,9 +1010,9 @@ function npMarkets(tab = 'all') {
 let paperRender = 0;
 const paperUpdate = () => { const [r] = route(); if (['paper', 'pdoc', 'page', 'front', 'home', ''].includes(r)) { clearTimeout(paperRender); paperRender = setTimeout(() => { const y = window.scrollY; render(); window.scrollTo(0, y); }, 250); } };
 function paperStatus(p) {
-  if (p.status === 'loading') return `<span class="np-m">Opening pages… ${p.pages}${p.total ? ' of ' + p.total : ''}</span>`;
+  if (p.status === 'loading') return `<span class="np-m">Opening the file…</span>`;
   const done = p.readPages.length;
-  if (isBusy(p) || p.status === 'reading') return `<span class="redc b sm">Reading pages… ${done} of ${p.pages}</span><div class="pbar"><i style="width:${Math.round((done / Math.max(1, p.pages)) * 100)}%"></i></div>`;
+  if (isBusy(p) || p.status === 'reading') { const tot = p.total || p.pages; return `<span class="redc b sm">Reading page ${Math.min(done + 1, tot)} of ${tot} · ${p.stories.length} stories so far</span><div class="pbar"><i style="width:${Math.round((done / Math.max(1, tot)) * 100)}%"></i></div>`; }
   if (p.status === 'paused') return `<span class="redc sm">${esc(p.error || 'Paused')}</span><button class="np-btn mt8" data-act="presume" data-id="${p.id}">Continue reading (${done} of ${p.pages} pages done)</button>`;
   const r = (p.readIds || []).length;
   return `<span class="okc b sm">Ready · ${p.stories.length} stories${r ? ` · ${r} read` : ''}</span>`;
@@ -1028,11 +1028,18 @@ function viewPaper() {
 }
 function viewPaperDoc(pid) {
   const p = getPaper(pid); if (!p) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This paper is no longer on this phone.</div>`;
-  const tops = [...p.stories].sort((a, b) => b.imp - a.imp || a.pg - b.pg).filter((x) => x.imp >= 4).slice(0, 10);
-  const pages = Array.from({ length: p.pages }, (_, i) => `<a class="np-pg" href="#page/${p.id}/${i}"><img data-pimg="${p.id}:${i}" alt=""><span>p${i + 1}${p.labels[i] ? ' · ' + esc(p.labels[i]) : ''}</span></a>`).join('');
-  return `${npBack('Today’s Paper', '#paper')}<div class="mast sm"><h1 style="font-size:30px">${esc(p.name)}</h1><div class="np-m">${new Date(p.at).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · ${p.pages} pages</div><div class="mt8">${paperStatus(p)}</div></div><div class="rule2"></div>
-  ${tops.length ? `<div class="np-sec"><div class="np-st">Top stories in this paper</div>${tops.map((x) => `<a class="np-row" href="#pstory/${x.id}"><div class="grow"><div class="kick ${x.imp >= 5 ? 'red' : ''}">Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}${(p.readIds || []).includes(x.id) ? ' · read' : ''}</div><div class="hl3">${esc(x.h)}</div><div class="np-m">${esc(x.s)}</div></div></a>`).join('')}</div><div class="rule1"></div>` : ''}
-  <div class="np-sec"><div class="np-st">Pages</div><div class="np-pages">${pages}</div></div>`;
+  const read = p.readIds || [];
+  const tops = [...p.stories].filter((x) => x.imp >= 4).sort((a, b) => b.imp - a.imp || a.pg - b.pg).slice(0, 6);
+  const tot = p.total || p.pages;
+  const pages = Array.from({ length: p.pages }, (_, i) => { const c = p.stories.filter((x) => x.pg === i).length; return `<a class="pd-pg" href="#page/${p.id}/${i}"><img data-pimg="${p.id}:${i}" alt=""><span><b>${i + 1}</b> ${esc(p.labels[i] || '')}</span><em>${p.readPages.includes(i) ? c + ' stories' : 'reading…'}</em></a>`; }).join('');
+  const line = (x) => `<a class="pd-line ${read.includes(x.id) ? 'rd' : ''}" href="#pstory/${x.id}"><span class="hl4">${esc(x.h)}</span>${ic('chev', 14)}</a>`;
+  const byPage = Array.from({ length: p.pages }, (_, i) => { const st = p.stories.filter((x) => x.pg === i).sort((a, b) => b.imp - a.imp); return st.length ? `<div class="pd-ph"><a href="#page/${p.id}/${i}">Page ${i + 1}${p.labels[i] ? ' · ' + esc(p.labels[i]) : ''}</a><span class="np-m">${st.length}</span></div>${st.map(line).join('')}` : ''; }).join('');
+  return `${npBack('Today’s Paper', '#paper')}
+  <div class="pd-head"><div class="col grow" style="gap:2px"><b class="pd-name">${esc(p.name)}</b><span class="np-m">${new Date(p.at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${tot} pages · ${p.stories.length} stories${read.length ? ` · ${read.length} read` : ''}</span></div><a class="np-btn solid pd-open" href="#page/${p.id}/0">Read paper</a></div>
+  ${p.status !== 'ready' ? `<div class="mt8">${paperStatus(p)}</div>` : ''}
+  <div class="pd-strip">${pages}</div>
+  ${tops.length ? `<div class="rule1"></div><div class="np-st mt8">Top stories</div>${tops.map((x) => `<a class="pd-top ${read.includes(x.id) ? 'rd' : ''}" href="#pstory/${x.id}"><div class="kick ${x.imp >= 5 ? 'red' : ''}">Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}</div><div class="hl4">${esc(x.h)}</div><div class="np-m clamp2">${esc(x.s)}</div></a>`).join('')}` : ''}
+  ${byPage ? `<div class="rule1"></div><div class="np-st mt8">Every story, page by page</div>${byPage}` : ''}`;
 }
 function viewPage(pid, i) {
   const p = getPaper(pid); i = Number(i) || 0; if (!p) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This paper is no longer on this phone.</div>`;
@@ -1043,7 +1050,7 @@ function viewPage(pid, i) {
   setTimeout(() => $('#pstrip .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 50);
   return `<div class="np-bar sp"><a href="#pdoc/${pid}" class="row" style="gap:2px">${ic('back', 18, 2)}Pages</a><b class="sm">${esc(p.name)} · Page ${i + 1} of ${p.pages}</b><span></span></div>
   <div class="row" style="gap:6px;padding:8px 0"><button class="np-chip ${text ? '' : 'on'}" data-act="pmode" data-v="page">Page</button><button class="np-chip ${text ? 'on' : ''}" data-act="pmode" data-v="text">Text</button>${text ? '' : `<button class="np-chip" data-act="pzoom">${S.pzoom ? 'Fit to screen' : 'Zoom in'}</button>`}<span class="grow"></span>${i > 0 ? `<a class="np-chip" href="#page/${pid}/${i - 1}">‹</a>` : ''}${i < p.pages - 1 ? `<a class="np-chip" href="#page/${pid}/${i + 1}">›</a>` : ''}</div>
-  ${text ? (st.length ? st.map((x) => `<article class="np-sec"><div class="kick">${esc(x.k)}</div><a class="hl2" href="#pstory/${x.id}">${esc(x.h)}</a><div class="np-art">${x.b.split(/\n{2,}/).map((t) => `<p>${esc(t)}</p>`).join('')}</div></article><div class="rule1"></div>`).join('') : `<div class="empty">${p.readPages.includes(i) ? 'No news stories found on this page.' : 'This page is still being read.'}</div>`) :
+  ${text ? (st.length ? st.map((x) => `<article class="np-sec"><div class="kick">${esc(x.k)}</div><a class="hl2" href="#pstory/${x.id}">${esc(x.h)}</a><div class="np-art">${x.b ? x.b.split(/\n{2,}/).map((t) => `<p>${esc(t)}</p>`).join('') : `<p>${esc(x.s)}</p><a class="np-m" href="#pstory/${x.id}">Tap for the full story ›</a>`}</div></article><div class="rule1"></div>`).join('') : `<div class="empty">${p.readPages.includes(i) ? 'No news stories found on this page.' : 'This page is still being read.'}</div>`) :
   `<div class="pp-wrap ${S.pzoom ? 'zoom' : ''}"><div class="pp"><img data-pimg="${pid}:${i}" alt="Page ${i + 1}">${boxes}</div></div><p class="np-m" style="text-align:center;margin:8px 0 0">${st.length ? 'Tap a story on the page to read it' : p.readPages.includes(i) ? 'No news stories found on this page' : 'Finding the stories on this page…'}</p>`}
   <div class="pstrip" id="pstrip">${strip}</div>
   ${!text && st.length ? `<div class="rule1"></div><div class="np-sec"><div class="np-st">On this page</div>${st.map((x) => `<a class="np-row" href="#pstory/${x.id}"><div class="grow"><div class="kick">${esc(x.k)}${read.includes(x.id) ? ' · read' : ''}</div><div class="hl3">${esc(x.h)}</div><div class="np-m">${esc(x.s)}</div></div></a>`).join('')}</div>` : ''}`;
@@ -1053,12 +1060,13 @@ function viewPStory(sid) {
   if (!x) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This story is no longer on this phone.</div>`;
   markPaperRead(p, sid);
   const order = [...p.stories].sort((a, b) => a.pg - b.pg || b.imp - a.imp); const k = order.indexOf(x); const nx = order[k + 1];
-  const paras = x.b.split(/\n{2,}/).filter(Boolean);
+  const paras = (x.b || '').split(/\n{2,}/).filter(Boolean);
+  if (!x.b) setTimeout(async () => { const box = $('#pbody'); if (!box) return; try { await ensureBody(p, x, S.settings.key); if ($('#pbody') === box) box.innerHTML = x.b.split(/\n{2,}/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join(''); } catch (e) { if ($('#pbody') === box) box.innerHTML = `<p class="np-m">Could not load the full text right now. <a href="#page/${pid}/${x.pg}">Read it on the page</a>.</p>`; } }, 0);
   return `${npBack('Page ' + (x.pg + 1), `#page/${pid}/${x.pg}`)}<div class="rule2"></div>
   <div class="kick red mt12">${esc(p.name)} · Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}</div>
   <h1 class="art-h">${esc(x.h)}</h1>
   ${x.s ? `<div class="np-box simple"><div class="kick ink">In simple words</div><p>${esc(x.s)}</p>${x.w ? `<p><b>For you:</b> ${esc(x.w)}</p>` : ''}</div>` : ''}
-  <div class="np-art dc">${paras.map((t) => `<p>${esc(t)}</p>`).join('')}</div>
+  <div class="np-art dc" id="pbody">${paras.length ? paras.map((t) => `<p>${esc(t)}</p>`).join('') : `<div class="col gap8">${[100, 96, 98, 70, 100, 85].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div><p class="np-m mt8">Getting the full text from the page…</p>`}</div>
   <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:16px"><a class="np-chip" href="#page/${pid}/${x.pg}">See it on the page</a><button class="np-chip" data-act="askpaper" data-id="${sid}">${ic('sparkle', 14)} Ask about this</button><button class="np-chip" data-act="pshare" data-id="${sid}">${ic('share', 14)} Share</button></div>
   ${nx ? `<div class="rule1 mt20"></div><a class="np-row" href="#pstory/${nx.id}"><div class="grow"><div class="kick">Next story · page ${nx.pg + 1}</div><div class="hl3">${esc(nx.h)}</div></div>${ic('chev', 18)}</a>` : ''}`;
 }

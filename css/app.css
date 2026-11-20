@@ -399,3 +399,19 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 :root[data-theme=paper] .nav a.on{color:var(--ink);font-weight:700}
 :root[data-theme=paper] .h1,:root[data-theme=paper] .h2{font-weight:800}
 .np-img:has(.art),.np-th:has(.art){display:none}
+/* paper contents page */
+.pd-head{display:flex;gap:12px;align-items:center;padding:4px 0 10px;border-bottom:3px double var(--ink)}
+.pd-name{font-family:var(--head);font-size:22px;font-weight:800;line-height:1.15;color:var(--ink)}
+.pd-open{width:auto;flex:none;padding:10px 14px;font-size:13px}
+.pd-strip{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;margin:12px -18px 0;padding:0 18px 4px;scroll-snap-type:x mandatory}
+.pd-strip::-webkit-scrollbar{display:none}
+.pd-pg{flex:none;width:118px;display:flex;flex-direction:column;gap:3px;scroll-snap-align:start}
+.pd-pg img{width:118px;height:160px;object-fit:cover;object-position:top;border:1px solid var(--line2);background:var(--card);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.pd-pg span{font-size:11.5px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pd-pg em{font-style:normal;font-size:10.5px;color:var(--muted)}
+.pd-top{display:block;padding:9px 0;border-bottom:1px solid var(--line)}
+.pd-top .hl4{margin:2px 0 3px}
+.pd-ph{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-bottom:4px;border-bottom:1px solid var(--ink);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.pd-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.pd-line .hl4{font-size:15px;font-weight:600}
+.pd-line.rd .hl4,.pd-top.rd .hl4{color:var(--muted)}
