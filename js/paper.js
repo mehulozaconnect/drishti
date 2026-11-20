@@ -24,6 +24,7 @@ export async function loadPapers() {
     const cut = Date.now() - 8 * 864e5;
     for (const p of all.filter((p) => p.at < cut)) await removePaper(p.id, p);
     PAPERS.list = all.filter((p) => p.at >= cut).sort((a, b) => b.at - a.at);
+    for (const p of PAPERS.list) if (p.status === 'reading' || p.status === 'loading') { p.status = p.pages && p.readPages.length >= p.pages ? 'ready' : 'paused'; p.error = p.status === 'paused' ? 'Reading stopped when the app was closed.' : ''; }
   } catch (e) { console.warn('papers', e); }
   return PAPERS.list;
 }
