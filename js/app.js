@@ -1028,20 +1028,27 @@ function viewPaper() {
   ${list ? `<div class="np-sec"><div class="np-st">This week</div>${list}</div>` : ''}
   <div class="np-sec"><div class="np-box"><div class="kick ink">How it works</div><p class="sm">1 · Each page is read and split into its stories.<br>2 · Read the real page, or tap a story for clean text and a simple explanation.<br>3 · Big stories from your paper also appear on the Front page and in their section, marked “In your paper”.<br>Papers are kept on this phone for 7 days.</p></div></div>`;
 }
-function viewPaperDoc(pid) {
+const PSECS = [['top', 'Top stories'], ['Mumbai', 'Mumbai'], ['India', 'India'], ['World', 'World'], ['Business', 'Business'], ['Sports', 'Sports'], ['Entertainment', 'Entertainment'], ['Opinion', 'Opinion'], ['Other', 'More']];
+function viewPaperDoc(pid, sec) {
   const p = getPaper(pid); if (!p) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This paper is no longer on this phone.</div>`;
-  const read = p.readIds || [];
-  const tops = [...p.stories].filter((x) => x.imp >= 4).sort((a, b) => b.imp - a.imp || a.pg - b.pg).slice(0, 6);
-  const tot = p.total || p.pages;
+  const read = p.readIds || []; const tot = p.total || p.pages;
+  const placeOf = (x) => PSECS.some(([k]) => k === x.place) ? x.place : 'Other';
+  const counts = {}; for (const x of p.stories) counts[placeOf(x)] = (counts[placeOf(x)] || 0) + 1;
+  const unreadFirst = (a, b) => (read.includes(a.id) - read.includes(b.id)) || b.imp - a.imp || a.pg - b.pg;
+  const tops = [...p.stories].filter((x) => x.imp >= 4 && x.place !== 'Opinion').sort(unreadFirst).slice(0, 12);
+  sec = sec && (sec === 'top' || counts[sec]) ? decodeURIComponent(sec) : 'top';
+  const list = sec === 'top' ? (tops.length ? tops : [...p.stories].sort(unreadFirst).slice(0, 12)) : p.stories.filter((x) => placeOf(x) === sec).sort(unreadFirst);
+  const chips = PSECS.filter(([k]) => k === 'top' || counts[k]).map(([k, l]) => `<a href="#pdoc/${p.id}/${k}" class="${sec === k ? 'on' : ''}">${l}${k !== 'top' ? ` <em>${counts[k]}</em>` : ''}</a>`).join('');
+  setTimeout(() => $('#psec .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 0);
+  const card = (x, i) => `<a class="ps-card ${read.includes(x.id) ? 'rd' : ''} ${i === 0 && !read.includes(x.id) ? 'lead' : ''}" href="#pstory/${x.id}"><div class="kick ${x.imp >= 5 ? 'red' : ''}">${sec === 'top' ? esc(placeOf(x) === 'Other' ? 'News' : placeOf(x)) + ' · ' : ''}Page ${x.pg + 1}${read.includes(x.id) ? ' · read' : ''}</div><div class="${i === 0 ? 'hl2' : 'hl3'}">${esc(x.h)}</div>${x.s ? `<p class="np-p sm ${i === 0 ? '' : 'clamp2'}">${esc(x.s)}</p>` : ''}</a>`;
   const pages = Array.from({ length: p.pages }, (_, i) => { const c = p.stories.filter((x) => x.pg === i).length; return `<a class="pd-pg" href="#page/${p.id}/${i}"><img data-pimg="${p.id}:${i}" alt=""><span><b>${i + 1}</b> ${esc(p.labels[i] || '')}</span><em>${p.readPages.includes(i) ? c + ' stories' : 'reading…'}</em></a>`; }).join('');
-  const line = (x) => `<a class="pd-line ${read.includes(x.id) ? 'rd' : ''}" href="#pstory/${x.id}"><span class="hl4">${esc(x.h)}</span>${ic('chev', 14)}</a>`;
-  const byPage = Array.from({ length: p.pages }, (_, i) => { const st = p.stories.filter((x) => x.pg === i).sort((a, b) => b.imp - a.imp); return st.length ? `<div class="pd-ph"><a href="#page/${p.id}/${i}">Page ${i + 1}${p.labels[i] ? ' · ' + esc(p.labels[i]) : ''}</a><span class="np-m">${st.length}</span></div>${st.map(line).join('')}` : ''; }).join('');
   return `${npBack('Today’s Paper', '#paper')}
-  <div class="pd-head"><div class="col grow" style="gap:2px"><b class="pd-name">${esc(p.name)}</b><span class="np-m">${new Date(p.at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${tot} pages · ${p.stories.length} stories${read.length ? ` · ${read.length} read` : ''}</span></div><a class="np-btn solid pd-open" href="#page/${p.id}/0">Read paper</a></div>
-  ${p.status !== 'ready' ? `<div class="mt8">${paperStatus(p)}</div>` : ''}
-  <div class="pd-strip">${pages}</div>
-  ${tops.length ? `<div class="rule1"></div><div class="np-st mt8">Top stories</div>${tops.map((x) => `<a class="pd-top ${read.includes(x.id) ? 'rd' : ''}" href="#pstory/${x.id}"><div class="kick ${x.imp >= 5 ? 'red' : ''}">Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}</div><div class="hl4">${esc(x.h)}</div><div class="np-m clamp2">${esc(x.s)}</div></a>`).join('')}` : ''}
-  ${byPage ? `<div class="rule1"></div><div class="np-st mt8">Every story, page by page</div>${byPage}` : ''}`;
+  <div class="pd-head"><div class="col grow" style="gap:2px"><b class="pd-name">${esc(p.name)}</b><span class="np-m">${tot} pages · ${p.stories.length} stories${read.length ? ` · ${read.length} read` : ''}</span></div><a class="np-btn pd-open" href="#page/${p.id}/0">Pages</a></div>
+  ${p.status !== 'ready' || isBusy(p) ? `<div class="mt8">${paperStatus(p)}</div>` : ''}
+  <nav class="ps-tabs" id="psec">${chips}</nav>
+  <div>${list.length ? list.map(card).join('') : '<div class="empty">No stories here yet.</div>'}</div>
+  <div class="rule1 mt20"></div><div class="np-st mt8">Browse pages</div>
+  <div class="pd-strip">${pages}</div>`;
 }
 function viewPage(pid, i) {
   const p = getPaper(pid); i = Number(i) || 0; if (!p) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This paper is no longer on this phone.</div>`;
@@ -1083,7 +1090,7 @@ function render() {
   const [r, a, c] = route(); const v = $('#view');
   const map = { history: viewHistory, home: viewFront, front: viewFront, quick: viewQuick, grow: viewGrow, ask: viewAsk, explore: npSections, sections: npSections, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide, paper: viewPaper };
   let html;
-  if (r === 'todo' || (r === 'section' && a === 'events')) html = viewTodo(r === 'todo' ? (a || 'all') : 'all'); else if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read' || r === 'story') html = viewRead(a, c != null ? Number(c) : null); else if (r === 'section') html = npSection(a); else if (r === 'markets' || r === 'money') html = npMarkets(a || 'all'); else if (r === 'pdoc') html = viewPaperDoc(a); else if (r === 'page') html = viewPage(a, c); else if (r === 'pstory') html = viewPStory(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewFront)();
+  if (r === 'todo' || (r === 'section' && a === 'events')) html = viewTodo(r === 'todo' ? (a || 'all') : 'all'); else if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read' || r === 'story') html = viewRead(a, c != null ? Number(c) : null); else if (r === 'section') html = npSection(a); else if (r === 'markets' || r === 'money') html = npMarkets(a || 'all'); else if (r === 'pdoc') html = viewPaperDoc(a, c); else if (r === 'page') html = viewPage(a, c); else if (r === 'pstory') html = viewPStory(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewFront)();
   const tab = r === 'read' || r === 'web' || r === 'story' ? S.lastTab : TAB_OF[r] || 'sections';
   if (!['story', 'read', 'web'].includes(r)) S.lastTab = tab;
   v.className = r === 'quick' ? 'full' : '';

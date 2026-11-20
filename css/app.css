@@ -419,3 +419,14 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 .pg-story .hl2{margin:4px 0 6px}
 .pg-story .np-p{margin:0 0 6px}
 .pg-story.rd .hl2{color:var(--muted)}
+/* paper by section */
+.ps-tabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:12px -18px 4px;padding:8px 18px;position:sticky;top:48px;z-index:5;background:var(--bg);border-bottom:1px solid var(--line2)}
+.ps-tabs::-webkit-scrollbar{display:none}
+.ps-tabs a{flex:none;font-size:13px;font-weight:600;padding:7px 13px;border:1px solid var(--ink);border-radius:20px;color:var(--ink);white-space:nowrap}
+.ps-tabs a em{font-style:normal;font-weight:500;opacity:.6;margin-left:2px}
+.ps-tabs a.on{background:var(--ink);color:var(--bg)}
+.ps-card{display:block;padding:12px 0;border-bottom:1px solid var(--line)}
+.ps-card .hl3{margin:3px 0 4px}
+.ps-card .np-p{margin:2px 0 0}
+.ps-card.lead .hl2{font-size:23px}
+.ps-card.rd .hl2,.ps-card.rd .hl3{color:var(--muted)}

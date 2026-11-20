@@ -63,7 +63,9 @@ export function parsePage(items, W, H) {
   // 3) order each story's text: columns left to right, lines top to bottom
   const out = [];
   for (const st of stories) {
-    let its = st.items.filter((t) => !/@\s?timesofindia|@\s?timesgroup|@\s?mid-day|@\s?hindustantimes|^\s*for more,|^\s*\(?p\s?\d+\)?\s*$/i.test(t[4]));
+    const EMAIL = /@\s?(timesofindia|timesgroup|mid-day|hindustantimes|htlive|expressindia|indianexpress)|^\s*@/i;
+    const mails = st.items.filter((t) => EMAIL.test(t[4]));
+    let its = st.items.filter((t) => !EMAIL.test(t[4]) && !/^\s*for more,|^\s*\(?p\s?\d+\)?\s*$/i.test(t[4]) && !mails.some((m) => Math.abs(m[0] - t[0]) < B * 3 && m[1] - t[1] > 0 && m[1] - t[1] < m[3] * 2.6 && t[4].length < 32));
     if (!its.length) continue;
     const lineW = median(its.filter((t) => t[2] > B * 6).map((t) => t[2])) || B * 15;
     its.sort((a, b) => a[0] - b[0]);
@@ -86,6 +88,7 @@ export function parsePage(items, W, H) {
         prev = t; prev.col = c; prev.drop = isDrop(t);
       }
     }
+    text = text.replace(/^(?:[A-Z][\w.’'-]+\s){1,3}(?=(?:[A-Z][a-z]+\s?){1,2}:\s)/, '');
     if (st.h.deck) text = st.h.deck + '\n\n' + text;
     text = text.replace(/[ \t]+/g, ' ').replace(/ ?\n\n ?/g, '\n\n').replace(/\n{3,}/g, '\n\n').trim();
     const words = text.split(/\s+/).length;
@@ -113,3 +116,12 @@ export function guessPlace(h, b) {
   if (/\b(us|china|pakistan|russia|ukraine|iran|israel|trump|un|nato|gaza|europe|uk|japan)\b/i.test(t)) return 'World';
   return 'India';
 }
+
+// which part of the paper a page is, from the small header at its top (e.g. TIMES CITY, NATION, SPORT)
+const PAGE_SECS = [['Mumbai', /\b(times city|city|mumbai|metro|hello mumbai|mumbai live)\b/i], ['India', /\b(nation|india|times nation|country)\b/i], ['World', /\b(world|global|times global|international|abroad)\b/i], ['Business', /\b(business|biz|times business|economy|markets|money)\b/i], ['Sports', /\b(sport|sports|times sport)\b/i], ['Entertainment', /\b(entertainment|bollywood|delhi times|bombay times|showbiz|cinema)\b/i], ['Opinion', /\b(edit|editorial|opinion|oped|op-ed|comment|the speaking tree|letters)\b/i]];
+export function pageSection(items, H) {
+  const top = items.filter((t) => t[1] < H * 0.06).map((t) => t[4]).join(' ').replace(/the times of india|times of india|hindustan times|mumbai mirror|mid-day|free press journal|indian express|economic times|the mumbai daily/gi, ' ');
+  for (const [name, re] of PAGE_SECS) if (re.test(top)) return name;
+  return '';
+}
+export const MUMBAI_RE = MUM;

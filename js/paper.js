@@ -1,7 +1,7 @@
 // Today's Paper: newspapers you upload (e-paper PDF or photos of pages), read page by page on this phone.
 // Pages and stories stay on this phone (IndexedDB). E-paper PDFs are split into stories on the phone;
 // photos are read by Gemini with your own key, which also writes the simple summaries.
-import { parsePage, looksReadable, firstSentences, guessPlace } from './layout.js';
+import { parsePage, looksReadable, firstSentences, guessPlace, pageSection, MUMBAI_RE } from './layout.js';
 
 const DB = 'drishti-paper';
 let dbp;
@@ -26,6 +26,7 @@ export async function loadPapers() {
     const cut = Date.now() - 8 * 864e5;
     for (const p of all.filter((p) => p.at < cut)) await removePaper(p.id, p);
     PAPERS.list = all.filter((p) => p.at >= cut).sort((a, b) => b.at - a.at);
+    for (const p of PAPERS.list) if (p.text?.some(Boolean) && (p.v || 1) < 2) { const keep = {}; for (const x of p.stories) if (x.w) keep[x.h] = x; p.readIds = []; for (let i = 0; i < p.pages; i++) if (p.text[i] && p.tl[i]) { p.labels[i] = ''; parseLocal(p, i); } for (const x of p.stories) { const k = keep[x.h]; if (k) Object.assign(x, { s: k.s, w: k.w, k: k.k, imp: k.imp }); } p.v = 2; savePaper(p); }
     for (const p of PAPERS.list) if (p.status === 'reading' || p.status === 'loading') { p.status = p.pages && p.readPages.length >= p.pages ? 'ready' : 'paused'; p.error = p.status === 'paused' ? 'Reading stopped when the app was closed.' : ''; }
   } catch (e) { console.warn('papers', e); }
   return PAPERS.list;
@@ -144,8 +145,10 @@ function addStories(p, i, list) {
 // PDF page with real text: split on the phone, instantly
 function parseLocal(p, i) {
   const [W, H] = p.dims[i];
+  const sec = pageSection(p.tl[i], H);
+  if (sec && !p.labels[i]) p.labels[i] = sec;
   const found = parsePage(p.tl[i], W, H);
-  addStories(p, i, found.map((x) => ({ ...x, s: firstSentences(x.b), place: guessPlace(x.h, x.b) })));
+  addStories(p, i, found.map((x) => ({ ...x, s: firstSentences(x.b), place: sec === 'Opinion' ? 'Opinion' : MUMBAI_RE.test(x.h + ' ' + x.b.slice(0, 300)) ? 'Mumbai' : sec || guessPlace(x.h, x.b) })));
   if (!p.readPages.includes(i)) p.readPages.push(i);
 }
 // AI touch: simple summary, why it matters, topic and importance (text only, small and fast)
@@ -208,7 +211,7 @@ async function run(p, key, onUpdate, feeder) {
 export async function addPaper(files, key, onUpdate) {
   const isPdf = files.length === 1 && /pdf/i.test(files[0].type || files[0].name);
   const id = 'p' + Date.now();
-  const p = { id, name: isPdf ? files[0].name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) : 'My newspaper', at: Date.now(), day: today(), pages: 0, readPages: [], labels: [], stories: [], readIds: [], tl: [], dims: [], text: [], enriched: [], status: 'loading', error: '' };
+  const p = { id, name: isPdf ? files[0].name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) : 'My newspaper', at: Date.now(), day: today(), pages: 0, readPages: [], labels: [], stories: [], readIds: [], tl: [], dims: [], text: [], enriched: [], v: 2, status: 'loading', error: '' };
   PAPERS.list.unshift(p); onUpdate();
   const feeder = async (push) => {
     if (isPdf) await pdfPages(files[0], async (blob, i, n, tl, dims) => { await tx('pages', 'readwrite', (s) => s.put(blob, id + ':' + i)); p.tl[i] = tl; p.dims[i] = dims; p.text[i] = looksReadable(tl); p.pages = i + 1; p.total = n; push(i); });
