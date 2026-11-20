@@ -1,5 +1,7 @@
 // Today's Paper: newspapers you upload (e-paper PDF or photos of pages), read page by page on this phone.
-// Pages and stories stay on this phone (IndexedDB). Reading the pages uses your own Gemini key.
+// Pages and stories stay on this phone (IndexedDB). E-paper PDFs are split into stories on the phone;
+// photos are read by Gemini with your own key, which also writes the simple summaries.
+import { parsePage, looksReadable, firstSentences, guessPlace } from './layout.js';
 
 const DB = 'drishti-paper';
 let dbp;
@@ -62,10 +64,16 @@ async function pdfPages(file, onPage) {
     let tl = [];
     try {
       const tc = await page.getTextContent();
-      tl = tc.items.filter((t) => t.str && t.str.trim()).map((t) => { const [x, y] = v.convertToViewportPoint(t.transform[4], t.transform[5]); const hh = Math.abs(t.transform[3]) || t.height || 8; return [Math.round((x / v.width) * 1000), Math.round(((y - hh / 2) / v.height) * 1000), Math.round((hh / v.height) * 1000), t.str, t.hasEOL ? 1 : 0]; });
+      for (const t of tc.items) {
+        if (!t.str || !t.str.trim()) continue;
+        const [a, b, c2, d, e, f] = t.transform; if (Math.abs(b) > 0.01 || Math.abs(c2) > 0.01) continue; // skip rotated text
+        const size = Math.hypot(c2, d) || Math.abs(d) || t.height || 8;
+        const [x, yb] = v.convertToViewportPoint(e, f);
+        tl.push([Math.round(x * 10) / 10, Math.round((yb - size * 0.85) * 10) / 10, Math.round((t.width || 0) * 10) / 10, Math.round(size * 10) / 10, t.str]);
+      }
     } catch {}
     const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.72));
-    await onPage(blob, i - 1, n, tl);
+    await onPage(blob, i - 1, n, tl, [v.width, v.height]);
     page.cleanup();
   }
 }
@@ -79,8 +87,8 @@ async function photoBlob(file) {
 const toB64 = (blob) => new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
 
 // ---------- Gemini ----------
-async function gemini(key, parts, json, maxOut) {
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
+async function gemini(key, parts, json, maxOut, lite) {
+  const models = lite ? ['gemini-2.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash'] : ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
   for (let attempt = 0; attempt < 4; attempt++) {
     let limited = false;
     for (const model of models) {
@@ -99,7 +107,8 @@ async function gemini(key, parts, json, maxOut) {
       try { return JSON.parse(out.replace(/^```(json)?|```$/g, '').trim()); } catch { continue; }
     }
     if (!limited) break;
-    await new Promise((r) => setTimeout(r, 30000)); // free limit: wait and try again
+    if (attempt >= 1) break; // do not keep the reader waiting
+    await new Promise((r) => setTimeout(r, 20000)); // free limit: wait once and try again
   }
   throw new Error('limit');
 }
@@ -111,25 +120,6 @@ async function findStories(key, blob) {
   return gemini(key, [{ inline_data: { mime_type: 'image/jpeg', data: await toB64(blob) } }, { text: FIND }], true, 6000);
 }
 const clampBox = (b) => Array.isArray(b) && b.length === 4 && b.every((x) => typeof x === 'number') ? b.map((x) => Math.max(0, Math.min(1000, Math.round(x)))) : null;
-// story text from the PDF text layer inside the story's box
-function textFromLayer(tl, box, h) {
-  if (!tl?.length || !box) return '';
-  const [y0, x0, y1, x1] = box; const m = 8;
-  const inside = tl.filter(([x, y]) => x >= x0 - m && x <= x1 + m && y >= y0 - m && y <= y1 + m);
-  if (!inside.length) return '';
-  // body size = the most common text height; bigger text is headline, smaller is captions/credits
-  const hs = {}; for (const t of inside) hs[t[2]] = (hs[t[2]] || 0) + t[3].length;
-  const body = Number(Object.entries(hs).sort((a, b) => b[1] - a[1])[0][0]);
-  let out = ''; let prev = null;
-  for (const t of inside) {
-    if (t[2] > body * 1.45) continue; // headline / kicker
-    if (prev && (t[1] - prev[1] > body * 1.9 || prev[1] - t[1] > body * 3)) out += t[1] - prev[1] > body * 2.6 ? '\n\n' : ' ';
-    else if (prev) out += prev[4] || /\s$/.test(prev[3]) || /^\s/.test(t[3]) ? ' ' : '';
-    out += t[3]; prev = t;
-  }
-  out = out.replace(/(\w)-\s+(\w)/g, '$1$2').replace(/[ \t]+/g, ' ').replace(/ ?\n\n ?/g, '\n\n').trim();
-  return out.length > 120 ? out : '';
-}
 // Step 2 (only when you open a story without PDF text, e.g. a photo): type out the full text from a crop of the page
 export async function ensureBody(p, x, key) {
   if (x.b) return x.b;
@@ -147,56 +137,82 @@ export async function ensureBody(p, x, key) {
   x.b = t; await savePaper(p); return t;
 }
 
-async function readOne(p, key, i) {
+function addStories(p, i, list) {
+  p.stories = p.stories.filter((x) => x.pg !== i);
+  list.forEach((x, k) => p.stories.push({ id: `${p.id}-${i}-${k}`, pg: i, h: x.h, k: x.k || '', b: x.b || '', s: x.s || '', w: x.w || '', place: x.place || 'Other', imp: x.imp || 2, box: x.box || null }));
+}
+// PDF page with real text: split on the phone, instantly
+function parseLocal(p, i) {
+  const [W, H] = p.dims[i];
+  const found = parsePage(p.tl[i], W, H);
+  addStories(p, i, found.map((x) => ({ ...x, s: firstSentences(x.b), place: guessPlace(x.h, x.b) })));
+  if (!p.readPages.includes(i)) p.readPages.push(i);
+}
+// AI touch: simple summary, why it matters, topic and importance (text only, small and fast)
+async function enrichPage(p, key, i) {
+  const st = p.stories.filter((x) => x.pg === i); if (!st.length) { p.enriched.push(i); return; }
+  const list = st.map((x, k) => ({ i: k, h: x.h, t: x.b.slice(0, 700) }));
+  const res = await gemini(key, [{ text: `These are the news stories from one page of an Indian newspaper. For each, write in very simple everyday English:
+"s": what happened, two short sentences; "w": why it matters to a reader living in Mumbai, one short sentence; "k": topic in 1-2 words; "place": Mumbai, India, World, Business, Sports, Entertainment or Other; "imp": importance 1-5.
+Also give "label": what this page is in 1-2 words (Front page, Mumbai, Nation, World, Business, Sports, Entertainment, Editorial...).
+Return only JSON: {"label":"","stories":[{"i":0,"s":"","w":"","k":"","place":"","imp":3}]}
+Use only facts in the text.
+
+${JSON.stringify(list)}` }], true, 4000, true);
+  if (res.label) p.labels[i] = String(res.label).slice(0, 30);
+  for (const r of res.stories || []) { const x = st[r.i]; if (!x) continue; if (r.s) x.s = String(r.s); if (r.w) x.w = String(r.w); if (r.k) x.k = String(r.k); if (r.place) x.place = r.place; if (r.imp) x.imp = Math.max(1, Math.min(5, Number(r.imp) || x.imp)); }
+  p.enriched.push(i);
+}
+// photo, or a PDF without usable text: Gemini finds the stories in the picture
+async function readVision(p, key, i) {
   const blob = await tx('pages', 'readonly', (s) => s.get(p.id + ':' + i));
   const res = await findStories(key, blob);
   if (i === 0 && res.paper && res.paper.length < 60) p.name = res.paper.trim();
   p.labels[i] = (res.label || '').slice(0, 30);
-  const tl = p.tl?.[i];
-  p.stories = p.stories.filter((x) => x.pg !== i);
-  (res.stories || []).forEach((x, k) => { if (!x.h) return; const box = clampBox(x.box); p.stories.push({ id: `${p.id}-${i}-${k}`, pg: i, h: String(x.h).trim(), k: String(x.k || '').trim(), b: textFromLayer(tl, box, x.h), s: String(x.s || '').trim(), w: String(x.w || '').trim(), place: x.place || 'Other', imp: Math.max(1, Math.min(5, Number(x.imp) || 2)), box }); });
-  p.readPages.push(i);
+  addStories(p, i, (res.stories || []).filter((x) => x.h).map((x) => ({ h: String(x.h).trim(), k: String(x.k || ''), s: String(x.s || ''), w: String(x.w || ''), place: x.place || 'Other', imp: Math.max(1, Math.min(5, Number(x.imp) || 2)), box: clampBox(x.box) })));
+  if (!p.readPages.includes(i)) p.readPages.push(i);
+  p.enriched.push(i);
 }
-const errText = (e) => e.message === 'key' ? 'Your Gemini key was not accepted. Check it in Settings.' : e.message === 'offline' ? 'You went offline. Tap Continue to finish.' : 'Google’s free AI limit was reached. Tap Continue in a minute to finish.';
+const errText = (e) => e.message === 'key' ? 'Your Gemini key was not accepted. Check it in Settings.' : e.message === 'offline' ? 'You went offline. Tap Continue to finish.' : 'Google’s free AI limit was reached for now. Tap Continue later to finish.';
 
-// pages are read while the rest are still opening, 3 at a time
+// pages are handled while the rest are still opening; AI jobs run 3 at a time
 async function run(p, key, onUpdate, feeder) {
   PAPERS.busy.add(p.id);
-  p.status = 'reading'; p.error = ''; await savePaper(p); onUpdate();
-  const queue = []; for (let i = 0; i < p.pages; i++) if (!p.readPages.includes(i)) queue.push(i);
-  let feeding = !!feeder, stop = false, wake = null;
+  p.enriched = p.enriched || []; p.status = 'reading'; p.error = ''; await savePaper(p); onUpdate();
+  const queue = []; const waiters = []; let feeding = !!feeder, stop = false;
+  const push = (i) => { queue.push(i); while (waiters.length) waiters.shift()(); };
+  const plan = (i) => { if (p.text?.[i]) { if (!p.readPages.includes(i)) parseLocal(p, i); if (key && !p.enriched.includes(i)) push(i); } else if (!p.readPages.includes(i) || !p.enriched.includes(i)) push(i); };
+  for (let i = 0; i < p.pages; i++) plan(i);
   const worker = async () => {
     while (!stop) {
-      if (!queue.length) { if (!feeding) return; await new Promise((r) => (wake = r)); continue; }
+      if (!queue.length) { if (!feeding) return; await new Promise((r) => waiters.push(r)); continue; }
       const i = queue.shift();
-      try { await readOne(p, key, i); }
-      catch (e) { p.error = errText(e); if (e.message !== 'limit') stop = true; }
+      try { if (p.text?.[i]) await enrichPage(p, key, i); else await readVision(p, key, i); }
+      catch (e) { if (!p.text?.[i]) p.error = errText(e); if (e.message === 'key' || e.message === 'offline') stop = true; if (e.message === 'limit' && p.text?.[i]) stop = true; }
       await savePaper(p); onUpdate();
     }
   };
-  const workers = [worker(), worker(), worker()];
+  const workers = key ? [worker(), worker(), worker()] : [];
   if (feeder) {
-    try { await feeder((i) => { queue.push(i); wake?.(); wake = null; }); }
+    try { await feeder((i) => { plan(i); savePaper(p); onUpdate(); }); }
     catch (e) { console.warn(e); p.error = 'Could not open every page of this file.'; }
-    feeding = false; wake?.();
-    setTimeout(() => wake?.(), 50);
+    feeding = false; while (waiters.length) waiters.shift()();
   }
-  // release any waiting worker
-  const tick = setInterval(() => { wake?.(); wake = null; }, 500);
-  await Promise.all(workers); clearInterval(tick);
+  await Promise.all(workers);
   p.status = p.readPages.length >= p.pages ? 'ready' : 'paused';
-  if (p.status === 'ready') p.error = '';
+  if (p.status === 'ready' && !p.text?.some(Boolean)) p.error = '';
+  if (p.status === 'paused' && !key) p.error = 'Photo pages need your free Gemini key. Add it in Settings, then tap Continue.';
   await savePaper(p); PAPERS.busy.delete(p.id); onUpdate();
 }
 
 export async function addPaper(files, key, onUpdate) {
   const isPdf = files.length === 1 && /pdf/i.test(files[0].type || files[0].name);
   const id = 'p' + Date.now();
-  const p = { id, name: isPdf ? files[0].name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) : 'My newspaper', at: Date.now(), day: today(), pages: 0, readPages: [], labels: [], stories: [], readIds: [], tl: [], status: 'loading', error: '' };
+  const p = { id, name: isPdf ? files[0].name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) : 'My newspaper', at: Date.now(), day: today(), pages: 0, readPages: [], labels: [], stories: [], readIds: [], tl: [], dims: [], text: [], enriched: [], status: 'loading', error: '' };
   PAPERS.list.unshift(p); onUpdate();
   const feeder = async (push) => {
-    if (isPdf) await pdfPages(files[0], async (blob, i, n, tl) => { await tx('pages', 'readwrite', (s) => s.put(blob, id + ':' + i)); p.tl[i] = tl; p.pages = i + 1; p.total = n; push(i); onUpdate(); });
-    else for (const [i, f] of [...files].entries()) { const b = await photoBlob(f); await tx('pages', 'readwrite', (s) => s.put(b, id + ':' + i)); p.pages = i + 1; p.total = files.length; push(i); onUpdate(); }
+    if (isPdf) await pdfPages(files[0], async (blob, i, n, tl, dims) => { await tx('pages', 'readwrite', (s) => s.put(blob, id + ':' + i)); p.tl[i] = tl; p.dims[i] = dims; p.text[i] = looksReadable(tl); p.pages = i + 1; p.total = n; push(i); });
+    else for (const [i, f] of [...files].entries()) { const b = await photoBlob(f); await tx('pages', 'readwrite', (s) => s.put(b, id + ':' + i)); p.pages = i + 1; p.total = files.length; push(i); }
   };
   await run(p, key, onUpdate, feeder);
   if (!p.pages) { await removePaper(id); p.error = 'Could not open this file. Try the PDF again, or photos of the pages.'; onUpdate(); }

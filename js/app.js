@@ -133,7 +133,7 @@ async function loadData(force) {
     const [n, m] = await Promise.all([fetch('data/news.json' + bust).then((r) => r.ok ? r.json() : null), fetch('data/markets.json' + bust).then((r) => r.ok ? r.json() : null).catch(() => null)]);
     if (n) {
       for (const s of n.stories) { const sm = s.summary || ''; const bar = sm.indexOf(' | '); if (bar > 15 && bar < 220 && s.title.toLowerCase().includes(sm.slice(0, Math.min(bar, 30)).toLowerCase())) s.summary = sm.slice(bar + 3); const cap = /^(.{10,260}?) \| ([A-Z][\w.&-]*(?:[ ,]+[A-Z][\w.&-]*){0,2}) (?=[A-Z])/.exec(s.summary || ''); if (cap && s.summary.length - cap[0].length > 80) s.summary = s.summary.slice(cap[0].length); }
-      for (const s of n.stories) s.summary = cleanSum(s.summary);
+      for (const s of n.stories) { s.summary = cleanSum(s.summary); if (s.image) { const m = /\/(20\d\d)[\/-](\d\d)[\/-]/.exec(s.image); if (/default|placeholder|no[-_]?image|\/logo\/tech/i.test(s.image) || (m && s.time - Date.UTC(+m[1], +m[2] - 1, 28) > 45 * 864e5)) s.image = null; } } // stock or old file photos are dropped
       S.news = n; S.byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
     }
     if (m) S.markets = m;
@@ -1012,14 +1012,16 @@ const paperUpdate = () => { const [r] = route(); if (['paper', 'pdoc', 'page', '
 function paperStatus(p) {
   if (p.status === 'loading') return `<span class="np-m">Opening the file…</span>`;
   const done = p.readPages.length;
-  if (isBusy(p) || p.status === 'reading') { const tot = p.total || p.pages; return `<span class="redc b sm">Reading page ${Math.min(done + 1, tot)} of ${tot} · ${p.stories.length} stories so far</span><div class="pbar"><i style="width:${Math.round((done / Math.max(1, tot)) * 100)}%"></i></div>`; }
+  const tot = p.total || p.pages; const en = (p.enriched || []).length;
+  if ((isBusy(p) || p.status === 'reading') && done < tot) return `<span class="redc b sm">Reading page ${Math.min(done + 1, tot)} of ${tot} · ${p.stories.length} stories so far</span><div class="pbar"><i style="width:${Math.round((done / Math.max(1, tot)) * 100)}%"></i></div>`;
+  if (isBusy(p) && en < tot) return `<span class="okc b sm">Ready to read · ${p.stories.length} stories</span><span class="np-m" style="display:block">Adding simple summaries… ${en} of ${tot} pages</span>`;
   if (p.status === 'paused') return `<span class="redc sm">${esc(p.error || 'Paused')}</span><button class="np-btn mt8" data-act="presume" data-id="${p.id}">Continue reading (${done} of ${p.pages} pages done)</button>`;
   const r = (p.readIds || []).length;
   return `<span class="okc b sm">Ready · ${p.stories.length} stories${r ? ` · ${r} read` : ''}</span>`;
 }
 function viewPaper() {
   const key = !!S.settings.key;
-  const up = `<div class="np-up">${ic('book', 34, 1.4)}<h3>Add today’s newspaper</h3><p class="np-m">E-paper PDF, or photos of the printed pages</p>${key ? `<div class="grid2 mt12"><label class="np-btn solid">Upload PDF<input type="file" accept="application/pdf,.pdf" data-upload="1" hidden></label><label class="np-btn">Photos of pages<input type="file" accept="image/*" multiple data-upload="1" hidden></label></div><p class="np-m mt8">Select all page photos together, in page order.</p>` : `<p class="np-p sm mt8">Reading the pages uses your free Google Gemini key, so the paper stays on your phone.</p><a class="np-btn solid mt8" href="#settings">Add your Gemini key</a>`}</div>`;
+  const up = `<div class="np-up">${ic('book', 34, 1.4)}<h3>Add today’s newspaper</h3><p class="np-m">E-paper PDF works best: it’s ready to read in seconds</p><div class="grid2 mt12"><label class="np-btn solid">Upload PDF<input type="file" accept="application/pdf,.pdf" data-upload="1" hidden></label><label class="np-btn">Photos of pages<input type="file" accept="image/*" multiple data-upload="1" hidden></label></div><p class="np-m mt8">${key ? 'For photos, select all pages together, in page order.' : 'Photos of pages and simple summaries need your free Gemini key. <a href="#settings" style="text-decoration:underline">Add it in Settings</a>.'}</p></div>`;
   const list = PAPERS.list.map((p) => `<div class="np-paper"><a href="#pdoc/${p.id}" class="np-pthumb"><img data-pimg="${p.id}:0" alt=""></a><div class="grow col" style="gap:3px"><a href="#pdoc/${p.id}" class="hl4">${esc(p.name)}</a><span class="np-m">${p.day === today() ? 'Today' : new Date(p.at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${p.pages} pages</span>${paperStatus(p)}</div><button class="np-ib" data-act="pdel" data-id="${p.id}" aria-label="Delete">${ic('x', 16)}</button></div>`).join('');
   return `${npTop()}<div class="mast sm"><h1>Today’s Paper</h1><div class="np-m">Read the newspaper you buy, page by page, right here</div></div>${npTabs('#paper')}
   <div class="np-sec">${up}</div>
@@ -1044,13 +1046,13 @@ function viewPaperDoc(pid) {
 function viewPage(pid, i) {
   const p = getPaper(pid); i = Number(i) || 0; if (!p) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This paper is no longer on this phone.</div>`;
   const st = p.stories.filter((x) => x.pg === i); const read = p.readIds || [];
-  const text = S.pmode === 'text';
+  const text = S.pmode !== 'page';
   const boxes = st.filter((x) => x.box && x.box[2] > x.box[0] && x.box[3] > x.box[1]).map((x) => `<a class="pbox ${read.includes(x.id) ? 'rd' : ''}" href="#pstory/${x.id}" aria-label="${esc(x.h)}" style="top:${x.box[0] / 10}%;left:${x.box[1] / 10}%;height:${(x.box[2] - x.box[0]) / 10}%;width:${(x.box[3] - x.box[1]) / 10}%"></a>`).join('');
   const strip = Array.from({ length: p.pages }, (_, k) => `<a href="#page/${pid}/${k}" class="${k === i ? 'on' : ''}"><img data-pimg="${pid}:${k}" alt=""><span>${k + 1}</span></a>`).join('');
   setTimeout(() => $('#pstrip .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 50);
   return `<div class="np-bar sp"><a href="#pdoc/${pid}" class="row" style="gap:2px">${ic('back', 18, 2)}Pages</a><b class="sm">${esc(p.name)} · Page ${i + 1} of ${p.pages}</b><span></span></div>
-  <div class="row" style="gap:6px;padding:8px 0"><button class="np-chip ${text ? '' : 'on'}" data-act="pmode" data-v="page">Page</button><button class="np-chip ${text ? 'on' : ''}" data-act="pmode" data-v="text">Text</button>${text ? '' : `<button class="np-chip" data-act="pzoom">${S.pzoom ? 'Fit to screen' : 'Zoom in'}</button>`}<span class="grow"></span>${i > 0 ? `<a class="np-chip" href="#page/${pid}/${i - 1}">‹</a>` : ''}${i < p.pages - 1 ? `<a class="np-chip" href="#page/${pid}/${i + 1}">›</a>` : ''}</div>
-  ${text ? (st.length ? st.map((x) => `<article class="np-sec"><div class="kick">${esc(x.k)}</div><a class="hl2" href="#pstory/${x.id}">${esc(x.h)}</a><div class="np-art">${x.b ? x.b.split(/\n{2,}/).map((t) => `<p>${esc(t)}</p>`).join('') : `<p>${esc(x.s)}</p><a class="np-m" href="#pstory/${x.id}">Tap for the full story ›</a>`}</div></article><div class="rule1"></div>`).join('') : `<div class="empty">${p.readPages.includes(i) ? 'No news stories found on this page.' : 'This page is still being read.'}</div>`) :
+  <div class="row" style="gap:6px;padding:8px 0"><button class="np-chip ${text ? 'on' : ''}" data-act="pmode" data-v="text">Stories</button><button class="np-chip ${text ? '' : 'on'}" data-act="pmode" data-v="page">Original page</button>${text ? '' : `<button class="np-chip" data-act="pzoom">${S.pzoom ? 'Fit to screen' : 'Zoom in'}</button>`}<span class="grow"></span>${i > 0 ? `<a class="np-chip" href="#page/${pid}/${i - 1}">‹</a>` : ''}${i < p.pages - 1 ? `<a class="np-chip" href="#page/${pid}/${i + 1}">›</a>` : ''}</div>
+  ${text ? (st.length ? [...st].sort((a, b) => b.imp - a.imp).map((x) => `<a class="pg-story ${read.includes(x.id) ? 'rd' : ''}" href="#pstory/${x.id}"><div class="kick ${x.imp >= 5 ? 'red' : ''}">${esc(x.k || x.place || '')}${read.includes(x.id) ? ' · read' : ''}</div><div class="hl2">${esc(x.h)}</div><p class="np-p">${esc(x.s || '')}</p><span class="np-m">Read full story ›</span></a>`).join('') : `<div class="empty">${p.readPages.includes(i) ? 'No news stories found on this page.' : 'This page is still being read.'}</div>`) :
   `<div class="pp-wrap ${S.pzoom ? 'zoom' : ''}"><div class="pp"><img data-pimg="${pid}:${i}" alt="Page ${i + 1}">${boxes}</div></div><p class="np-m" style="text-align:center;margin:8px 0 0">${st.length ? 'Tap a story on the page to read it' : p.readPages.includes(i) ? 'No news stories found on this page' : 'Finding the stories on this page…'}</p>`}
   <div class="pstrip" id="pstrip">${strip}</div>
   ${!text && st.length ? `<div class="rule1"></div><div class="np-sec"><div class="np-st">On this page</div>${st.map((x) => `<a class="np-row" href="#pstory/${x.id}"><div class="grow"><div class="kick">${esc(x.k)}${read.includes(x.id) ? ' · read' : ''}</div><div class="hl3">${esc(x.h)}</div><div class="np-m">${esc(x.s)}</div></div></a>`).join('')}</div>` : ''}`;
@@ -1065,7 +1067,7 @@ function viewPStory(sid) {
   return `${npBack('Page ' + (x.pg + 1), `#page/${pid}/${x.pg}`)}<div class="rule2"></div>
   <div class="kick red mt12">${esc(p.name)} · Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}</div>
   <h1 class="art-h">${esc(x.h)}</h1>
-  ${x.s ? `<div class="np-box simple"><div class="kick ink">In simple words</div><p>${esc(x.s)}</p>${x.w ? `<p><b>For you:</b> ${esc(x.w)}</p>` : ''}</div>` : ''}
+  ${x.s && (!p.text?.[x.pg] || (p.enriched || []).includes(x.pg)) ? `<div class="np-box simple"><div class="kick ink">In simple words</div><p>${esc(x.s)}</p>${x.w ? `<p><b>For you:</b> ${esc(x.w)}</p>` : ''}</div>` : ''}
   <div class="np-art dc" id="pbody">${paras.length ? paras.map((t) => `<p>${esc(t)}</p>`).join('') : `<div class="col gap8">${[100, 96, 98, 70, 100, 85].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div><p class="np-m mt8">Getting the full text from the page…</p>`}</div>
   <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:16px"><a class="np-chip" href="#page/${pid}/${x.pg}">See it on the page</a><button class="np-chip" data-act="askpaper" data-id="${sid}">${ic('sparkle', 14)} Ask about this</button><button class="np-chip" data-act="pshare" data-id="${sid}">${ic('share', 14)} Share</button></div>
   ${nx ? `<div class="rule1 mt20"></div><a class="np-row" href="#pstory/${nx.id}"><div class="grow"><div class="kick">Next story · page ${nx.pg + 1}</div><div class="hl3">${esc(nx.h)}</div></div>${ic('chev', 18)}</a>` : ''}`;

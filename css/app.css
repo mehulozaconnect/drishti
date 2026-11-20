@@ -415,3 +415,7 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 .pd-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
 .pd-line .hl4{font-size:15px;font-weight:600}
 .pd-line.rd .hl4,.pd-top.rd .hl4{color:var(--muted)}
+.pg-story{display:block;padding:12px 0 14px;border-bottom:1px solid var(--line)}
+.pg-story .hl2{margin:4px 0 6px}
+.pg-story .np-p{margin:0 0 6px}
+.pg-story.rd .hl2{color:var(--muted)}
