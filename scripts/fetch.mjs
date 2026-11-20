@@ -267,6 +267,7 @@ function buildStory(c, section) {
   if (BREAKING.test(lead.title)) score *= ageH < 3 ? 2.2 : ageH < 8 ? 1.6 : 1.35; // fresh breaking news jumps to the top
   if (isLocal) score *= 1.5;
   const trending = c.items.some((i) => i.top);
+  const ranks = c.items.map((i) => i.rank).filter((r) => r != null); const rank = ranks.length ? Math.min(...ranks) : null;
   if (trending) score *= 1.8; // Google News editors also rate it a top story today
   return {
     id: hash(section.id + '|' + [...tokens(lead.title)].sort().join(' ')),
@@ -283,10 +284,13 @@ function buildStory(c, section) {
     glinks: c.items.map((i) => i.link).filter((l) => l.includes('news.google.com')).slice(0, 3),
     local: !!isLocal,
     trending,
+    rank,
     breaking: BREAKING.test(lead.title) && ageH < 6,
     score: Math.round(score * 1000) / 1000
   };
 }
+
+const cleanSum = (t) => (t || '').replace(/<\/?[a-z][^>]*>?/gi, ' ').replace(/^[\w-]*"\s*\/>\s*/, '').replace(/\b(share via|copy ?link|whatsapp-stroke|copylink|google info)\b/gi, ' ').replace(/\bAdd [A-Z][\w ]{1,30}? on Google\b/g, ' ').replace(/\bBy [A-Z][\w. ]{2,40}? Published On \d{1,2} \w{3} \d{4}( \d{1,2} \w{3} \d{4})?/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
 // ---------- fact checks ----------
 function attachFactChecks(stories, checks) {
@@ -474,7 +478,7 @@ ${batch.map((s) => JSON.stringify({ id: s.id, headlines: [s.title, ...(s.alt || 
     const c = cache[s.id];
     if (c?.summary) { s.summary = c.summary; if (c.headline) s.headline = c.headline; s.ai = !!c.ai; }
     else s.summary = extractive(s.body, s.desc);
-    s.summary = stripTitle(s.summary, s.title);
+    s.summary = cleanSum(stripTitle(s.summary, s.title));
   }
   // drop cache entries older than 4 days
   for (const k of Object.keys(cache)) { if (NOW - (cache[k].at || 0) > 3 * 864e5) delete cache[k]; else if (cache[k].text) cache[k].text = cache[k].text.slice(0, 1300); }
@@ -503,6 +507,7 @@ async function markets(prev) {
   const want = {
     nifty: ['^NSEI', 'Nifty 50'], sensex: ['^BSESN', 'Sensex'], bank: ['^NSEBANK', 'Bank Nifty'], it: ['^CNXIT', 'Nifty IT'],
     usdinr: ['INR=X', 'USD / INR'], brent: ['BZ=F', 'Brent crude'], goldusd: ['GC=F', 'Gold (USD/oz)'], silverusd: ['SI=F', 'Silver (USD/oz)'],
+    eurinr: ['EURINR=X', 'Euro'], gbpinr: ['GBPINR=X', 'British pound'], aedinr: ['AEDINR=X', 'UAE dirham'], wti: ['CL=F', 'WTI crude'], natgas: ['NG=F', 'Natural gas'], copper: ['HG=F', 'Copper'],
     dow: ['^DJI', 'Dow Jones'], nasdaq: ['^IXIC', 'Nasdaq'], btc: ['BTC-USD', 'Bitcoin']
   };
   const out = { updated: NOW, quotes: {}, movers: { gainers: [], losers: [] }, nifty: {} };
@@ -512,7 +517,7 @@ async function markets(prev) {
   // Indicative Indian gold and silver rates from international price, rupee, and duty + GST.
   const u = out.quotes.usdinr?.price, gu = out.quotes.goldusd, su = out.quotes.silverusd;
   const DUTY = Number(process.env.GOLD_DUTY || 0.06), GST = 0.03, OZ = 31.1035;
-  if (u && gu) { const p = (gu.price / OZ) * 10 * u * (1 + DUTY) * (1 + GST); const pp = (gu.prev / OZ) * 10 * (out.quotes.usdinr.prev || u) * (1 + DUTY) * (1 + GST); out.quotes.gold = { name: 'Gold 24K · 10g', price: Math.round(p), prev: Math.round(pp), change: p - pp, pct: ((p - pp) / pp) * 100, spark: gu.spark.map((v) => Math.round((v / OZ) * 10 * u * (1 + DUTY) * (1 + GST))), indicative: true }; out.quotes.gold22 = { name: 'Gold 22K · 10g', price: Math.round(p * 0.916), indicative: true }; }
+  if (u && gu) { const p = (gu.price / OZ) * 10 * u * (1 + DUTY) * (1 + GST); const pp = (gu.prev / OZ) * 10 * (out.quotes.usdinr.prev || u) * (1 + DUTY) * (1 + GST); out.quotes.gold = { name: 'Gold 24K · 10g', price: Math.round(p), prev: Math.round(pp), change: p - pp, pct: ((p - pp) / pp) * 100, spark: gu.spark.map((v) => Math.round((v / OZ) * 10 * u * (1 + DUTY) * (1 + GST))), indicative: true }; out.quotes.gold22 = { name: 'Gold 22K · 10g', price: Math.round(p * 0.916), pct: ((p - pp) / pp) * 100, indicative: true }; }
   if (u && su) { const p = (su.price / OZ) * 1000 * u * (1 + DUTY) * (1 + GST); const pp = (su.prev / OZ) * 1000 * (out.quotes.usdinr.prev || u) * (1 + DUTY) * (1 + GST); out.quotes.silver = { name: 'Silver · 1kg', price: Math.round(p), prev: Math.round(pp), change: p - pp, pct: ((p - pp) / pp) * 100, spark: su.spark.map((v) => Math.round((v / OZ) * 1000 * u * (1 + DUTY) * (1 + GST))), indicative: true }; }
   const res = [];
   for (let i = 0; i < MOVERS.length; i += 10) {
@@ -551,7 +556,7 @@ async function main() {
   const state = await readJson('state.json', { alerted: [], briefDate: '' }, CACHE);
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
-    const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i) => ({ ...i, origin: sec.id, google: u.includes('news.google.com'), top: u.includes(TOP_FEED) || u === 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' }))));
+    const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i, idx) => { const main = u === 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' || u.includes('/topic/NATION'); const top = u.includes(TOP_FEED) || main; return { ...i, origin: sec.id, google: u.includes('news.google.com'), top, rank: main ? idx : top ? 25 + idx : null }; })));
     const maxAge = sec.id === 'knowledge' || sec.id === 'events' ? 168 : (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
     return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title) && (!sec.exclude || !sec.exclude.test(i.title)));
   }));
@@ -602,7 +607,7 @@ async function main() {
   const quick60 = [...q].slice(0, 90);
 
   const topPerSec = new Set(SECTIONS.flatMap((sec) => all.filter((x) => x.section === sec.id).slice(0, 30).map((x) => x.id)));
-  const toSummarise = all.filter((s) => q.has(s.id) || topPerSec.has(s.id) || s.n >= 3).slice(0, 420);
+  const toSummarise = all.filter((s) => q.has(s.id) || topPerSec.has(s.id) || s.n >= 3 || s.rank != null).slice(0, 420);
   await enrich(toSummarise, cache);
   { const bad = new Set(toSummarise.filter((x) => cache[x.id]?.bad || COMMENTS.test(x.link)).map((x) => x.id)); if (bad.size) { all = all.filter((x) => !bad.has(x.id)); log('dropped comment-page stories', bad.size); } }
   await summarise(toSummarise, cache);
@@ -616,9 +621,14 @@ async function main() {
 
   const [mk, vids] = await Promise.all([markets(prevMarkets), videos()]);
 
+  // Front page: led by what Google News' editors rank as India's top stories right now, then our must-know
+  const front = [];
+  { const fresh = all.filter((x) => x.rank != null && NOW - x.time < 20 * 3.6e6 && !['events', 'knowledge', 'viral'].includes(x.section));
+    const order = [...fresh.sort((a, b) => a.rank - b.rank || b.score - a.score), ...mustKnow.map((id) => all.find((x) => x.id === id)).filter(Boolean)];
+    for (const st of order) { if (front.length >= 14) break; if (front.includes(st.id)) continue; if (front.some((id) => similar(tokens(all.find((x) => x.id === id).title), tokens(st.title)) >= 0.25)) continue; front.push(st.id); } }
   const brief = await editorPick(all);
   if (brief) for (const x of brief) { const st = all.find((s) => s.id === x.id); if (st) { st.bh = x.h; st.bs = x.t; } }
-  const news = { updated: NOW, sections, mustKnow, quick60, brief: brief ? brief.map((x) => x.id) : null, stories: all, factChecks: checks.slice(0, 15), videos: vids, stats: { feeds: feedStats.length, ok: feedStats.filter((f) => f.ok).length, items: sectionItems.flat().length } };
+  const news = { updated: NOW, sections, front, mustKnow, quick60, brief: brief ? brief.map((x) => x.id) : null, stories: all, factChecks: checks.slice(0, 15), videos: vids, stats: { feeds: feedStats.length, ok: feedStats.filter((f) => f.ok).length, items: sectionItems.flat().length } };
 
   // Safety: never replace good data with an empty run
   if (all.length < 20 && prevNews?.stories?.length) { log('Too few stories this run, keeping previous news'); }

@@ -1,6 +1,7 @@
 import { THOUGHTS, TIPS, GUIDE, LEARN } from './content.js';
 import { CALCS, inr, dur, monthsToGoal, sipForGoal, fvSip } from './grow.js';
 import { PLACES, COST, COST_HINT } from './todo.js';
+import { PAPERS, today, loadPapers, removePaper, pageUrl, getPaper, markPaperRead, addPaper, resumePaper, isBusy } from './paper.js';
 
 // ---------- small helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -78,13 +79,14 @@ const logo = (s = 34) => `<svg width="${s}" height="${s}" viewBox="0 0 120 120" 
 const DEFAULT_SECTIONS = ['mumbai', 'events', 'india', 'world', 'markets', 'money', 'gold', 'knowledge', 'health', 'sports', 'gadgets', 'phones', 'bollywood', 'movies', 'viral', 'spiritual'];
 const S = {
   news: null, markets: null, byId: {}, weather: null, loc: null,
-  settings: Object.assign({ name: 'Mehul', theme: 'light', v: 2, sections: DEFAULT_SECTIONS, key: '', model: 'gemini-2.5-flash' }, LS.get('settings', {})),
+  settings: Object.assign({ name: 'Mehul', theme: 'paper', v: 2, sections: DEFAULT_SECTIONS, key: '', model: 'gemini-2.5-flash' }, LS.get('settings', {})),
   read: new Set(LS.get('read', [])), saved: LS.get('saved', []), guide: LS.get('guide', []),
   chat: [], range: '1D', moneyTab: 'markets', lastRoute: '#home', installEvt: null
 };
 const saveSettings = () => LS.set('settings', S.settings);
 if ((S.settings.v || 1) < 3 && !S.settings.sections.includes('events')) { S.settings.sections.splice(1, 0, 'events'); S.settings.v = 3; LS.set('settings', S.settings); }
 if ((S.settings.v || 1) < 2) { for (const id of ['knowledge', 'sports']) if (!S.settings.sections.includes(id)) S.settings.sections.push(id); S.settings.sections = DEFAULT_SECTIONS.filter((x) => S.settings.sections.includes(x)); S.settings.v = 2; LS.set('settings', S.settings); }
+if ((S.settings.v || 1) < 4) { S.settings.theme = 'paper'; S.settings.v = 4; LS.set('settings', S.settings); }
 S.history = LS.get('history', []);
 const markRead = (id) => {
   if (S.read.has(id)) return;
@@ -124,12 +126,14 @@ const inSection = (s, id) => s.section === id; // each story lives in one sectio
 const secStories = (id) => (S.news?.stories || []).filter((s) => inSection(s, id)).sort((a, b) => b.score - a.score);
 
 // ---------- data ----------
+const cleanSum = (t) => (t || '').replace(/<\/?[a-z][^>]*>?/gi, ' ').replace(/^[\w-]*"\s*\/>\s*/, '').replace(/\b(share via|copy ?link|whatsapp-stroke|copylink|google info)\b/gi, ' ').replace(/\bAdd [A-Z][\w ]{1,30}? on Google\b/g, ' ').replace(/\bBy [A-Z][\w. ]{2,40}? Published On \d{1,2} \w{3} \d{4}( \d{1,2} \w{3} \d{4})?/g, ' ').replace(/\s{2,}/g, ' ').trim();
 async function loadData(force) {
   const bust = force ? '?t=' + Date.now() : '?t=' + Math.floor(Date.now() / 3e5);
   try {
     const [n, m] = await Promise.all([fetch('data/news.json' + bust).then((r) => r.ok ? r.json() : null), fetch('data/markets.json' + bust).then((r) => r.ok ? r.json() : null).catch(() => null)]);
     if (n) {
       for (const s of n.stories) { const sm = s.summary || ''; const bar = sm.indexOf(' | '); if (bar > 15 && bar < 220 && s.title.toLowerCase().includes(sm.slice(0, Math.min(bar, 30)).toLowerCase())) s.summary = sm.slice(bar + 3); const cap = /^(.{10,260}?) \| ([A-Z][\w.&-]*(?:[ ,]+[A-Z][\w.&-]*){0,2}) (?=[A-Z])/.exec(s.summary || ''); if (cap && s.summary.length - cap[0].length > 80) s.summary = s.summary.slice(cap[0].length); }
+      for (const s of n.stories) s.summary = cleanSum(s.summary);
       S.news = n; S.byId = Object.fromEntries(n.stories.map((s) => [s.id, s]));
     }
     if (m) S.markets = m;
@@ -200,7 +204,7 @@ function art(sec, size = 84, big = false) {
 const img = (s, sz, big) => s.image ? `<img src="${esc(s.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:window.__art('${s.section}',${sz},${big ? 1 : 0})}).firstChild)">` : art(s.section, sz, big);
 window.__art = (sec, sz, big) => art(sec, sz, !!big);
 const storyRow = (s) => { const m = secMeta(s.section); return `<a class="story" href="#story/${s.id}"><div class="thumb">${img(s, 84)}</div><div class="col gap4 grow"><span class="tag" style="color:${m.tint}">${esc(m.short)} · ${esc(s.sources[0]?.name || '')}</span><span class="ttl clamp3" data-sh="${s.id}">${esc(H(s))}</span>${s.summary ? `<span class="small muted clamp2" data-ss="${s.id}">${esc(T(s))}</span>` : ''}<span class="meta">${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${ic('shield', 12, 2.2)} ${s.n} sources</span>` : ''}${s.factCheck ? ` · <span style="color:var(--bad)">fact-check</span>` : ''}${s.local ? ' · <span style="color:var(--accent-text)">Near you</span>' : ''}</span></div></a>`; };
-const navHtml = (on) => `<nav class="nav" aria-label="Main"><div class="in">${[['home', 'home', 'Home'], ['quick', 'bolt', 'Quick 60'], ['money', 'chart', 'Money'], ['ask', 'sparkle', 'Ask'], ['explore', 'grid', 'Explore']].map(([r, i, l]) => `<a href="#${r}" class="${on === r ? 'on' : ''}">${ic(i, 22)}${l}</a>`).join('')}</div></nav>`;
+const navHtml = (on) => `<nav class="nav" aria-label="Main"><div class="in">${[['front', 'home', 'Front'], ['paper', 'book', 'Paper'], ['sections', 'grid', 'Sections'], ['markets', 'chart', 'Markets'], ['ask', 'sparkle', 'Ask']].map(([r, i, l]) => `<a href="#${r}" class="${on === r ? 'on' : ''}">${ic(i, 22)}${l}</a>`).join('')}</div></nav>`;
 const backBar = (label = 'Back') => `<div class="top" style="padding-top:8px"><button class="back" data-act="back">${ic('back', 20, 2)}${label}</button></div>`;
 function spark(vals, w = 300, h = 90, color = 'var(--up)', fill = true) {
   if (!vals || vals.length < 2) return '';
@@ -606,16 +610,20 @@ function viewRead(id, srcIdx) {
       box.innerHTML = html || readerFallback(s, url, 'The full article could not be shown here, so this is the summary.');
     } catch (e) { if ($('#rbody') === box) box.innerHTML = readerFallback(s, url, 'Could not load the full article right now.'); explainSimply(s, ''); }
   }, 0);
-  return `${backBar()}
-  <div class="dimg">${img(s, 220, true)}</div>
-  <div class="row gap8 mt16" style="flex-wrap:wrap"><span class="badge" style="background:${m.color};color:${m.tint}">${esc(m.short)}</span>${verify(s)}<span class="xs muted">${ago(s.time)} ago</span></div>
-  <h1 class="rt" data-sh="${s.id}">${esc(H(s))}</h1>
+  return `${npBack(secName(s.section), '#section/' + s.section)}<div class="rule2"></div>
+  <div class="kick red mt12">${esc(secName(s.section))}${s.breaking ? ' · Breaking' : ''}${s.local ? ' · Near you' : ''}</div>
+  <h1 class="art-h" data-sh="${s.id}">${esc(H(s))}</h1>
+  ${T(s) ? `<p class="art-deck">${esc((T(s).match(/^.{40,240}?[.!?](\s|$)/) || [T(s).slice(0, 220)])[0].trim())}</p>` : ''}
+  <div class="art-ver">${s.n > 1 ? `<b class="okc">✓ Confirmed by ${s.n} outlets</b>` : '<b>Single source</b>'}<span class="np-m">${esc(s.sources.slice(0, 3).map((x) => x.name).join(', '))} · ${ago(s.time)} ago</span></div>
+  ${s.factCheck ? `<a class="fc mt12" href="#web/${encodeURIComponent(s.factCheck.link)}">${ic('alert', 18, 2)}<span><b>Fact-check:</b> ${esc(s.factCheck.title)} <span class="xs">(${esc(s.factCheck.source)})</span></span></a>` : ''}
+  ${s.image ? `<div class="np-img mt12">${img(s, 220, true)}</div>` : ''}
   <div id="explain"></div>
-  <div class="row gap8 mt8">${avatars([src], 1)}<span class="small" style="font-weight:600">${esc(src.name)}</span>${s.n > 1 ? `<span class="xs muted">· also reported by ${s.n - 1} more</span>` : ''}</div>
-  <div id="rbody" class="mt16"><div class="col gap8">${[100, 96, 98, 70, 100, 92, 60].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div><p class="xs muted mt12">Loading the full story…</p></div>
-  <div class="row gap8 mt24"><button class="btn btn-ghost" data-act="save" data-id="${s.id}" aria-label="Save">${ic('bookmark', 20)}</button><button class="btn btn-ghost" data-act="share" data-id="${s.id}" aria-label="Share">${ic('share', 20)}</button><a class="btn btn-line grow" href="#ask" data-act="askabout" data-id="${s.id}">${ic('sparkle', 18)} Ask about this</a></div>
-  ${s.n > 1 ? `<div class="sec-head"><span class="h2" style="font-size:18px">Read it from another outlet</span></div>${s.sources.map((x, i) => i === (srcIdx ?? 0) ? '' : `<a class="srcrow" href="#read/${s.id}/${i}"><span class="row gap8"><span class="av" style="background:${avColor(x.name)};margin:0">${esc(initials(x.name))}</span><span style="font-weight:500">${esc(x.name)}</span></span>${ic('chev', 16)}</a>`).join('')}` : ''}
-  <p class="xs muted mt16" style="text-align:center">Article by ${esc(src.name)}, shown in reading view. <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--accent-text)">Open original page</a></p>`;
+  <div class="np-m mt16">Full report from <b>${esc(src.name)}</b></div>
+  <div id="rbody" class="np-art dc mt8"><div class="col gap8">${[100, 96, 98, 70, 100, 92, 60].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div><p class="xs muted mt12">Loading the full story…</p></div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:18px"><button class="np-chip" data-act="save" data-id="${s.id}">${ic('bookmark', 14)} Save</button><button class="np-chip" data-act="share" data-id="${s.id}">${ic('share', 14)} Share</button><a class="np-chip" href="#ask" data-act="askabout" data-id="${s.id}">${ic('sparkle', 14)} Ask about this</a></div>
+  ${s.n > 1 ? `<div class="rule1 mt20"></div><div class="np-st">Read it from another outlet</div>${s.sources.map((x, i) => i === (srcIdx ?? 0) ? '' : `<a class="np-idx" href="#read/${s.id}/${i}"><span>${esc(x.name)}</span>${ic('chev', 16)}</a>`).join('')}` : ''}
+  ${(() => { const rel = unread(secStories(s.section)).filter((x) => x.id !== s.id).slice(0, 4); return rel.length ? `<div class="rule1 mt20"></div><div class="np-st">More in ${esc(secName(s.section))}</div>${rel.map((x) => npRow(x, esc(x.sources[0]?.name || ''))).join('')}` : ''; })()}
+  <p class="np-note" style="text-align:center">Article by ${esc(src.name)}, shown in reading view. <a href="${esc(url)}" target="_blank" rel="noopener">Open original page</a></p>`;
 }
 function viewWeb(enc) {
   const url = decodeURIComponent(enc || '');
@@ -817,7 +825,7 @@ function viewSettings() {
   return `${backBar()}<h1 class="h1 mt8">Settings</h1>
   <div class="field"><label for="nm">Your name</label><input class="inp" id="nm" data-set="name" value="${esc(st.name)}" placeholder="Your name"></div>
   <div class="sec-head"><span class="h2">Look</span></div>
-  <div class="themes">${[['light', 'Light', '#F7F5F0', '#16171B', '#E6E2D9'], ['sepia', 'Paper', '#F4ECDD', '#2B2217', '#E3D6BE'], ['dark', 'Dark', '#0D0E12', '#F4F2EE', '#23262E'], ['midnight', 'Midnight', '#0B1220', '#EEF2FA', '#233050']].map(([id, name, bg, fg, ln]) => `<button class="thm ${st.theme === id ? 'on' : ''}" data-act="settheme" data-v="${id}" style="background:${bg};color:${fg};box-shadow:inset 0 0 0 1px ${ln}"><b style="font-size:14px">${name}</b><i style="background:${fg};opacity:.85;width:70%"></i><i style="background:${fg};opacity:.35;width:90%"></i><i style="background:var(--accent);width:40%"></i></button>`).join('')}</div>
+  <div class="themes">${[['paper', 'Newsprint', '#F4EFE4', '#1B1915', '#1B1915'], ['light', 'Light', '#F7F5F0', '#16171B', '#E6E2D9'], ['sepia', 'Sepia', '#F4ECDD', '#2B2217', '#E3D6BE'], ['dark', 'Dark', '#0D0E12', '#F4F2EE', '#23262E'], ['midnight', 'Midnight', '#0B1220', '#EEF2FA', '#233050']].map(([id, name, bg, fg, ln]) => `<button class="thm ${st.theme === id ? 'on' : ''}" data-act="settheme" data-v="${id}" style="background:${bg};color:${fg};box-shadow:inset 0 0 0 1px ${ln}"><b style="font-size:14px">${name}</b><i style="background:${fg};opacity:.85;width:70%"></i><i style="background:${fg};opacity:.35;width:90%"></i><i style="background:var(--accent);width:40%"></i></button>`).join('')}</div>
   <div class="small muted mt16">Accent colour</div>
   <div class="accents">${[['saffron', '#E8650A', 'Saffron'], ['ocean', '#1F6FD1', 'Ocean'], ['emerald', '#0E8A5F', 'Emerald'], ['violet', '#6D4AD8', 'Violet'], ['rose', '#D6336C', 'Rose']].map(([id, col, name]) => `<button class="acc ${(st.accent || 'saffron') === id ? 'on' : ''}" data-act="setaccent" data-v="${id}" style="background:${col}" aria-label="${name}">${(st.accent || 'saffron') === id ? ic('check', 18, 3) : ''}</button>`).join('')}</div>
   <div class="sec-head"><span class="h2">Sections on Home</span></div>
@@ -857,19 +865,222 @@ function weatherSheet() {
   document.body.appendChild(bg);
 }
 
+// ---------- newspaper edition ----------
+const SEC_NAMES = { mumbai: 'Mumbai', india: 'India', world: 'World', markets: 'Markets', money: 'Money and SIP', gold: 'Gold and bullion', bollywood: 'Bollywood', movies: 'Movies', viral: 'Viral', phones: 'Phones', gadgets: 'Technology', health: 'Health', sports: 'Sports', knowledge: 'Knowledge', events: 'Things to do', spiritual: 'Spiritual' };
+const secName = (id) => SEC_NAMES[id] || secMeta(id).short;
+const srcLine = (s, k = 3) => `${s.n > 1 ? `<b class="okc">${s.n} sources</b> · ` : ''}${esc(s.sources.slice(0, k).map((x) => x.name).join(', '))} · ${ago(s.time)}`;
+const NP_TABS = [['#front', 'Front page'], ['#paper', 'Today’s Paper'], ['#section/mumbai', 'Mumbai'], ['#section/india', 'India'], ['#section/world', 'World'], ['#markets', 'Markets'], ['#markets/bullion', 'Bullion'], ['#section/bollywood', 'Bollywood'], ['#section/sports', 'Sports'], ['#section/gadgets', 'Tech'], ['#section/health', 'Health'], ['#sections', 'All sections']];
+const npTabs = (on) => { setTimeout(() => $('#nptabs .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 0); return `<nav class="np-tabs" id="nptabs">${NP_TABS.map(([h, l]) => `<a href="${h}" class="${h === on ? 'on' : ''}">${l}</a>`).join('')}</nav>`; };
+const wxShort = () => { const w = S.weather; if (!w?.w?.current) return '<span></span>'; return `<button data-act="weather" class="np-wx">${Math.round(w.w.current.temperature_2m)}° ${esc(w.loc.name)}${w.aqi != null ? ` · <span style="color:${aqiColor(w.aqi)}">AQI ${w.aqi}</span>` : ''}</button>`; };
+const npDate = () => new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const npTop = () => `<div class="np-meta"><span>${npDate()}</span>${wxShort()}<span class="row" style="gap:0"><a class="np-ib" href="#search" aria-label="Search">${ic('search', 18)}</a><a class="np-ib" href="#settings" aria-label="Settings">${ic('settings', 18)}</a></span></div>`;
+const npBack = (label, href) => `<div class="np-bar"><a href="${href}" class="row" style="gap:2px">${ic('back', 18, 2)}${esc(label)}</a></div>`;
+const npRow = (s, kick) => `<a class="np-row" href="#read/${s.id}"><div class="grow"><div class="kick">${kick}</div><div class="hl3" data-sh="${s.id}">${esc(H(s))}</div><div class="np-m">${srcLine(s, 2)}</div></div>${s.image ? `<div class="np-th">${img(s, 84)}</div>` : ''}</a>`;
+const npLead = (s, kick, big = true) => `<a class="np-lead" href="#read/${s.id}">${kick ? `<div class="kick red">${kick}</div>` : ''}<h2 class="${big ? 'hl1' : 'hl2'}" data-sh="${s.id}">${esc(H(s))}</h2>${s.image ? `<div class="np-img">${img(s, 220, true)}</div>` : ''}<p class="np-p" data-ss="${s.id}">${esc(T(s))}</p><div class="np-m">${srcLine(s)}</div></a>`;
+const npBrief = (s) => `<a class="np-brief" href="#read/${s.id}"><div class="hl3" data-sh="${s.id}">${esc(H(s))}</div><p class="np-p sm clamp3" data-ss="${s.id}">${esc(T(s))}</p><div class="np-m">${srcLine(s, 2)}</div></a>`;
+const PLACE = { mumbai: ['Mumbai'], india: ['India'], world: ['World'], markets: ['Business'], money: ['Business'], gold: ['Business'], sports: ['Sports'], bollywood: ['Entertainment'], movies: ['Entertainment'] };
+const todayPapers = () => PAPERS.list.filter((p) => p.day === today());
+const paperStories = (places) => todayPapers().flatMap((p) => p.stories.filter((x) => !places || places.includes(x.place)).map((x) => ({ ...x, pid: p.id, paper: p.name, read: (p.readIds || []).includes(x.id) })));
+const pRow = (x) => `<a class="np-row" href="#pstory/${x.id}"><div class="grow"><div class="kick red">In your paper · ${esc(x.paper)} p${x.pg + 1}</div><div class="hl3">${esc(x.h)}</div><div class="np-m">${esc(x.s)}</div></div></a>`;
+
+function frontList() {
+  const n = S.news; const out = [];
+  for (const id of [...(n.front || []), ...briefIds(), ...n.mustKnow]) { const s = S.byId[id]; if (s && !out.includes(s)) out.push(s); }
+  return out;
+}
+const Q = () => S.markets?.quotes || {};
+const rs = (v) => '₹' + Math.round(v).toLocaleString('en-IN');
+const pctC = (p) => p == null || isNaN(p) ? '' : `<span class="${p >= 0 ? 'up' : 'down'}">${pct(p)}</span>`;
+function ticker() {
+  const q = Q(); const cell = (k, l, f) => q[k] ? `<a href="#markets" class="tk"><span>${l}</span><b>${f(q[k].price)}</b>${pctC(q[k].pct)}</a>` : '';
+  const cells = [cell('sensex', 'Sensex', (v) => num(v)), cell('nifty', 'Nifty', (v) => num(v)), cell('usdinr', 'US Dollar', (v) => '₹' + num(v)), cell('gold', 'Gold 24K/10g', rs), cell('silver', 'Silver/kg', rs), cell('brent', 'Brent crude', (v) => '$' + num(v))].filter(Boolean);
+  return cells.length ? `<div class="ticker">${cells.join('')}</div>` : '';
+}
+
+function viewFront() {
+  const n = S.news;
+  const upd = n ? new Date(n.updated).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '';
+  const head = `${npTop()}<div class="mast"><h1>Drishti</h1></div><div class="rule2"></div><div class="np-meta2"><span>Mumbai edition</span><button data-act="refresh" class="row" style="gap:4px">Updated ${upd} ${ic('refresh', 13)}</button><span class="okc">● Live</span></div>${npTabs('#front')}`;
+  if (!n) return head + '<div class="empty">Fetching today’s news…</div>';
+  const used = new Set(); const use = (s) => { if (s) used.add(s.id); return s; };
+  const fresh = frontList().filter((s) => !S.read.has(s.id));
+  const brk = use(fresh.find((s) => (s.breaking && s.n >= 3) || (s.rank != null && s.rank < 3 && s.n >= 2 && Date.now() - s.first < 4 * 3.6e6)));
+  const lead = use(fresh.find((s) => !used.has(s.id) && (s.summary || '').length > 80));
+  const tops = fresh.filter((s) => !used.has(s.id)).slice(0, 5).map(use);
+  const pick = (id, k) => unread(secStories(id)).filter((s) => !used.has(s.id)).slice(0, k).map(use);
+  const mum = pick('mumbai', 3), ind = pick('india', 3), wor = pick('world', 3);
+  const money = [...pick('markets', 2), ...pick('money', 1), ...pick('gold', 1)].sort((a, b) => b.score - a.score).slice(0, 3);
+  const also = ['bollywood', 'sports', 'gadgets', 'health', 'movies', 'phones'].map((id) => [id, pick(id, 1)[0]]).filter(([, s]) => s);
+  const pap = paperStories().filter((x) => !x.read).sort((a, b) => b.imp - a.imp || a.pg - b.pg).slice(0, 4);
+  const col = (title, href, list) => list.length ? `<div class="np-col"><a class="kick ink" href="${href}">${title} ›</a>${list.map((s, i) => i === 0 ? `<div class="hl3 big" data-sh="${s.id}"><a href="#read/${s.id}">${esc(H(s))}</a></div><p class="np-p sm clamp3" data-ss="${s.id}">${esc(T(s))}</p><div class="np-m">${srcLine(s, 1)}</div>` : `<div class="thin"></div><a class="hl4" href="#read/${s.id}" data-sh="${s.id}">${esc(H(s))}</a><div class="np-m">${srcLine(s, 1)}</div>`).join('')}</div>` : '';
+  const block = (title, href, html) => html ? `<div class="rule1"></div><div class="np-sec"><a class="np-st" href="${href}">${title}<span>›</span></a>${html}</div>` : '';
+  const inside = DEFAULT_SECTIONS.map((id) => [id, unread(secStories(id)).length]).filter(([, c]) => c).map(([id, c]) => `<a class="np-idx" href="${id === 'events' ? '#todo' : '#section/' + id}"><span>${esc(secName(id))}</span><span class="np-m">${c} new</span></a>`).join('');
+  const th = THOUGHTS[dayIndex() % THOUGHTS.length];
+  return `${head}
+  ${brk ? `<a class="brk" href="#read/${brk.id}"><span class="brk-t">Breaking</span><span data-sh="${brk.id}">${esc(H(brk))}</span></a>` : ''}
+  ${ticker()}
+  ${lead ? `<div class="np-sec">${npLead(lead, `${esc(secName(lead.section))} · Lead story`)}</div>` : `<div class="caught mt16">${ic('check', 20, 2.4)}You’ve read today’s top stories</div>`}
+  ${block('Top stories', '#quick', tops.map(npBrief).join(''))}
+  ${mum.length || ind.length ? `<div class="rule1"></div><div class="np-2col">${col('Mumbai', '#section/mumbai', mum)}${col('India', '#section/india', ind)}</div>` : ''}
+  ${block('World', '#section/world', wor.map(npBrief).join(''))}
+  ${block('From today’s paper', '#paper', pap.length ? pap.map(pRow).join('') : `<a class="np-invite" href="#paper">${ic('book', 22)}<span class="grow"><b>Add today’s newspaper</b><span class="np-m">Upload the e-paper PDF or photos, and read it here page by page.</span></span>${ic('chev', 18)}</a>`)}
+  ${block('Money', '#markets', money.map(npBrief).join(''))}
+  ${also.length ? `<div class="rule1"></div><div class="np-sec"><div class="np-st">Also today</div><div class="np-grid">${also.map(([id, s]) => `<a href="#read/${s.id}" class="np-cell"><div class="kick">${esc(secName(id))}</div><div class="hl4" data-sh="${s.id}">${esc(H(s))}</div></a>`).join('')}</div></div>` : ''}
+  <div class="rule2 mt20"></div>
+  <div class="np-sec"><div class="np-st">Inside today</div>${inside}<a class="np-idx" href="#paper"><span>Today’s Paper</span><span class="np-m">${todayPapers().length ? paperStories().length + ' stories' : 'Add'}</span></a></div>
+  <div class="np-quote"><p>${esc(th[0])}</p><span class="np-m">— ${esc(th[1])}</span></div>
+  <div class="np-foot">Checked ${n.stats?.ok || ''} trusted sources · refreshes every 15 minutes · <a href="#history">Read history</a></div>`;
+}
+
+function npSection(id) {
+  if (!S.news) return `${npTop()}<div class="empty">Loading…</div>`;
+  const all = secStories(id); const list = unread(all); const readN = all.length - list.length;
+  const pap = PLACE[id] ? paperStories(PLACE[id]).filter((x) => !x.read).sort((a, b) => b.imp - a.imp) : [];
+  let extra = '';
+  if (id === 'spiritual') { const th = THOUGHTS[dayIndex() % THOUGHTS.length]; extra = `<div class="np-quote"><div class="kick">Thought of the day</div><p>${esc(th[0])}</p><span class="np-m">— ${esc(th[1])}</span></div>`; }
+  if (id === 'health') { const tp = TIPS[dayIndex() % TIPS.length]; extra = `<div class="np-quote"><div class="kick">Today’s self-care</div><p>${esc(tp[0])}</p><span class="np-m">${esc(tp[1])}</span></div>`; }
+  if (['gold', 'markets', 'money'].includes(id)) extra = ticker();
+  const on = NP_TABS.some(([h]) => h === '#section/' + id) ? '#section/' + id : '#sections';
+  return `${npTop()}<div class="mast sm"><h1>${esc(secName(id))}</h1><div class="np-m">${list.length} new stories${pap.length ? ` · ${pap.length} from your paper` : ''} · updated ${ago(S.news.updated)} ago</div></div>${npTabs(on)}
+  ${extra}
+  ${list[0] ? `<div class="np-sec">${npLead(list[0], esc(list[0].sources[0]?.name || ''))}</div>` : `<div class="caught mt16">${ic('check', 20, 2.4)}All caught up in ${esc(secName(id))}</div>`}
+  ${pap.length ? `<div class="rule1"></div><div class="np-sec">${pap.slice(0, 6).map(pRow).join('')}</div>` : ''}
+  ${list.length > 1 ? `<div class="rule1"></div><div class="np-sec">${list.slice(1, 40).map((s) => npRow(s, esc(s.sources[0]?.name || ''))).join('')}</div>` : ''}
+  ${list.length > 2 ? `<a class="np-invite" href="#quick/${id}">${ic('bolt', 20)}<span class="grow"><b>Swipe through ${esc(secName(id))}</b><span class="np-m">One story a screen, 60 words each</span></span>${ic('chev', 18)}</a>` : ''}
+  ${readN ? `<a class="np-invite" href="#history">${ic('history', 20)}<span class="grow">${readN} stories you’ve read are in Read history</span>${ic('chev', 18)}</a>` : ''}`;
+}
+
+function npSections() {
+  const n = S.news;
+  const rows = DEFAULT_SECTIONS.map((id) => { const l = unread(secStories(id)); return `<a class="np-idx tall" href="${id === 'events' ? '#todo' : '#section/' + id}"><span class="col grow" style="gap:2px"><b class="hl4">${esc(secName(id))}</b>${l[0] ? `<span class="np-m clamp1">${esc(H(l[0]))}</span>` : ''}</span><span class="np-m">${l.length || ''}</span></a>`; }).join('');
+  const tool = (href, icon, t, sub) => `<a class="np-idx tall" href="${href}"><span class="row grow" style="gap:12px">${ic(icon, 20)}<span class="col" style="gap:1px"><b>${t}</b><span class="np-m">${sub}</span></span></span>${ic('chev', 16)}</a>`;
+  return `${npTop()}<div class="mast sm"><h1>Sections</h1><div class="np-m">${n?.stories?.length || 0} stories from ${n?.stats?.ok || 0} trusted sources</div></div>${npTabs('#sections')}
+  <a class="np-search" href="#search">${ic('search', 18)}<span>Search all news</span></a>
+  <div class="np-sec">${rows}</div>
+  <div class="rule1"></div><div class="np-sec"><div class="np-st">Your reading</div>
+  ${tool('#quick', 'bolt', 'Quick 60', 'Swipe the day’s news, 60 words a story')}
+  ${tool('#history', 'history', 'Read history', S.history.length + ' read')}
+  ${tool('#saved', 'bookmark', 'Saved', S.saved.length + ' stories')}
+  ${tool('#grow', 'target', 'Grow your money', 'Calculators, SIP planner and guide')}
+  ${tool('#factchecks', 'alert', 'Fake news busted', (n?.factChecks?.length || 0) + ' fact-checks')}
+  ${n?.videos?.length ? tool('#videos', 'play', 'Trending videos', 'YouTube India') : ''}
+  ${tool('#settings', 'settings', 'Settings', 'Look, sections, language, AI key')}</div>`;
+}
+
+// ---------- markets ----------
+function marketLine(q) {
+  const parts = [];
+  if (q.sensex) parts.push(`Sensex ${q.sensex.pct >= 0 ? 'up' : 'down'} ${Math.abs(q.sensex.pct).toFixed(2)}% at ${num(q.sensex.price, 0)}`);
+  if (q.gold?.pct != null) parts.push(`gold ${q.gold.pct >= 0 ? 'up' : 'down'} at ${rs(q.gold.price)} for 10g`);
+  if (q.usdinr) parts.push(`dollar at ₹${num(q.usdinr.price)}`);
+  if (q.brent) parts.push(`crude at $${num(q.brent.price)}`);
+  const t = parts.join(', '); return t ? t[0].toUpperCase() + t.slice(1) + '.' : '';
+}
+function npMarkets(tab = 'all') {
+  const mk = S.markets; const q = Q(); const [st, open] = marketStatus();
+  const tabs = [['all', 'All'], ['stocks', 'Stocks'], ['bullion', 'Bullion'], ['currency', 'Currency'], ['commodities', 'Commodities']];
+  const head = `${npTop()}<div class="mast sm"><h1>Markets</h1><div class="np-m"><span style="color:${open ? 'var(--up)' : 'var(--muted)'}">●</span> ${st}${mk ? ' · updated ' + ago(mk.updated) + ' ago' : ''}</div></div><nav class="np-tabs">${tabs.map(([k, l]) => `<a href="#markets/${k}" class="${tab === k ? 'on' : ''}">${l}</a>`).join('')}<a href="#grow">Plan &amp; SIP</a></nav>`;
+  if (!mk) return head + '<div class="empty">Loading markets…</div>';
+  const row = (k, label, sub, f) => q[k] ? `<tr><td>${label}${sub ? `<div class="np-m">${sub}</div>` : ''}</td><td class="r b">${f(q[k].price)}</td><td class="r w">${pctC(q[k].pct)}</td></tr>` : '';
+  const tbl = (title, note, rows) => { const r = rows.join(''); return r ? `<div class="np-tt"><span>${title}</span><span class="np-m">${note || ''}</span></div><table class="np-tbl">${r}</table>` : ''; };
+  const n0 = (v) => num(v, 2), d2 = (v) => '$' + num(v), r2 = (v) => '₹' + num(v);
+  const idx = tbl('Indian indices', '', [row('sensex', 'Sensex', '', n0), row('nifty', 'Nifty 50', '', n0), row('bank', 'Bank Nifty', '', n0), row('it', 'Nifty IT', '', n0)]);
+  const bull = tbl('Bullion', 'Mumbai, incl. duty + GST', [row('gold', 'Gold 24K', 'per 10 g', rs), row('gold22', 'Gold 22K', 'per 10 g', rs), row('silver', 'Silver', 'per kg', rs), row('goldusd', 'Gold (global)', 'per ounce', d2), row('silverusd', 'Silver (global)', 'per ounce', d2)]);
+  const cur = tbl('Currency', '₹ for 1 unit', [row('usdinr', 'US Dollar', 'USD', r2), row('eurinr', 'Euro', 'EUR', r2), row('gbpinr', 'British Pound', 'GBP', r2), row('aedinr', 'UAE Dirham', 'AED', r2)]);
+  const com = tbl('Commodities', '', [row('brent', 'Brent crude', 'per barrel', d2), row('wti', 'WTI crude', 'per barrel', d2), row('natgas', 'Natural gas', 'per mmBtu', d2), row('copper', 'Copper', 'per pound', d2)]);
+  const wld = tbl('World', '', [row('dow', 'Dow Jones', 'US', n0), row('nasdaq', 'Nasdaq', 'US', n0), row('btc', 'Bitcoin', 'USD', (v) => '$' + num(v, 0))]);
+  const nf = q.nifty; const series = mk.nifty?.[S.range] || []; const rp = S.range === '1D' ? nf?.pct : S.range === '1M' ? mk.nifty['1Mpct'] : mk.nifty['1Ypct'];
+  const chart = nf ? `<div class="np-chart"><div class="row sp"><b>Nifty 50 · ${num(nf.price)}</b><span class="row" style="gap:2px">${['1D', '1M', '1Y'].map((r) => `<button data-act="range" data-r="${r}" class="rg ${S.range === r ? 'on' : ''}">${r}</button>`).join('')}</span></div>${pctC(rp)}${spark(series, 300, 90, rp >= 0 ? 'var(--up)' : 'var(--down)')}</div>` : '';
+  const mv = (list) => list.map((r) => `<tr><td>${esc(r.name)}</td><td class="r b">₹${num(r.price)}</td><td class="r w">${pctC(r.pct)}</td></tr>`).join('');
+  const movers = mk.movers?.gainers?.length ? `<div class="np-tt"><span>Top gainers</span><span class="np-m">${mk.breadth ? `${mk.breadth.up} up · ${mk.breadth.down} down` : ''}</span></div><table class="np-tbl">${mv(mk.movers.gainers)}</table><div class="np-tt"><span>Top losers</span></div><table class="np-tbl">${mv(mk.movers.losers)}</table>` : '';
+  const news = (ids) => ids.flatMap((id) => unread(secStories(id)).slice(0, 4)).sort((a, b) => b.score - a.score).slice(0, 6);
+  const newsBlock = (list) => list.length ? `<div class="np-tt"><span>In the news</span></div>${list.map((s) => npRow(s, esc(secName(s.section)))).join('')}` : '';
+  const line = marketLine(q);
+  const body = {
+    all: `${line ? `<div class="np-box"><div class="kick ink">Today in one line</div><p>${esc(line)}</p></div>` : ''}${idx}${bull}${cur}${com}${wld}${newsBlock(news(['markets', 'money', 'gold']))}`,
+    stocks: `${chart}${idx}${movers}${wld}${newsBlock(news(['markets', 'money']))}`,
+    bullion: `${bull}<p class="np-note">Indicative rates from the international price, rupee, 6% import duty and 3% GST. Your jeweller’s rate will differ slightly, and making charges are extra.</p>${newsBlock(news(['gold']))}`,
+    currency: `${cur}<p class="np-note">Rates are market rates; banks and money changers add their margin.</p>`,
+    commodities: `${com}${newsBlock(news(['markets']).filter((s) => /crude|oil|gas|copper|commodit|metal|opec/i.test(s.title)))}`
+  }[tab] || '';
+  return `${head}<div class="np-sec">${body}<a class="np-invite" href="#grow">${ic('target', 20)}<span class="grow"><b>Plan your investments</b><span class="np-m">Goal planner, SIP and 11 calculators</span></span>${ic('chev', 18)}</a><p class="np-note">Market data from Yahoo Finance, may be delayed. News and education only, not investment advice.</p></div>`;
+}
+
+// ---------- today's paper ----------
+let paperRender = 0;
+const paperUpdate = () => { const [r] = route(); if (['paper', 'pdoc', 'page', 'front', 'home', ''].includes(r)) { clearTimeout(paperRender); paperRender = setTimeout(() => { const y = window.scrollY; render(); window.scrollTo(0, y); }, 250); } };
+function paperStatus(p) {
+  if (p.status === 'loading') return `<span class="np-m">Opening pages… ${p.pages}${p.total ? ' of ' + p.total : ''}</span>`;
+  const done = p.readPages.length;
+  if (isBusy(p) || p.status === 'reading') return `<span class="redc b sm">Reading pages… ${done} of ${p.pages}</span><div class="pbar"><i style="width:${Math.round((done / Math.max(1, p.pages)) * 100)}%"></i></div>`;
+  if (p.status === 'paused') return `<span class="redc sm">${esc(p.error || 'Paused')}</span><button class="np-btn mt8" data-act="presume" data-id="${p.id}">Continue reading (${done} of ${p.pages} pages done)</button>`;
+  const r = (p.readIds || []).length;
+  return `<span class="okc b sm">Ready · ${p.stories.length} stories${r ? ` · ${r} read` : ''}</span>`;
+}
+function viewPaper() {
+  const key = !!S.settings.key;
+  const up = `<div class="np-up">${ic('book', 34, 1.4)}<h3>Add today’s newspaper</h3><p class="np-m">E-paper PDF, or photos of the printed pages</p>${key ? `<div class="grid2 mt12"><label class="np-btn solid">Upload PDF<input type="file" accept="application/pdf,.pdf" data-upload="1" hidden></label><label class="np-btn">Photos of pages<input type="file" accept="image/*" multiple data-upload="1" hidden></label></div><p class="np-m mt8">Select all page photos together, in page order.</p>` : `<p class="np-p sm mt8">Reading the pages uses your free Google Gemini key, so the paper stays on your phone.</p><a class="np-btn solid mt8" href="#settings">Add your Gemini key</a>`}</div>`;
+  const list = PAPERS.list.map((p) => `<div class="np-paper"><a href="#pdoc/${p.id}" class="np-pthumb"><img data-pimg="${p.id}:0" alt=""></a><div class="grow col" style="gap:3px"><a href="#pdoc/${p.id}" class="hl4">${esc(p.name)}</a><span class="np-m">${p.day === today() ? 'Today' : new Date(p.at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} · ${p.pages} pages</span>${paperStatus(p)}</div><button class="np-ib" data-act="pdel" data-id="${p.id}" aria-label="Delete">${ic('x', 16)}</button></div>`).join('');
+  return `${npTop()}<div class="mast sm"><h1>Today’s Paper</h1><div class="np-m">Read the newspaper you buy, page by page, right here</div></div>${npTabs('#paper')}
+  <div class="np-sec">${up}</div>
+  ${list ? `<div class="np-sec"><div class="np-st">This week</div>${list}</div>` : ''}
+  <div class="np-sec"><div class="np-box"><div class="kick ink">How it works</div><p class="sm">1 · Each page is read and split into its stories.<br>2 · Read the real page, or tap a story for clean text and a simple explanation.<br>3 · Big stories from your paper also appear on the Front page and in their section, marked “In your paper”.<br>Papers are kept on this phone for 7 days.</p></div></div>`;
+}
+function viewPaperDoc(pid) {
+  const p = getPaper(pid); if (!p) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This paper is no longer on this phone.</div>`;
+  const tops = [...p.stories].sort((a, b) => b.imp - a.imp || a.pg - b.pg).filter((x) => x.imp >= 4).slice(0, 10);
+  const pages = Array.from({ length: p.pages }, (_, i) => `<a class="np-pg" href="#page/${p.id}/${i}"><img data-pimg="${p.id}:${i}" alt=""><span>p${i + 1}${p.labels[i] ? ' · ' + esc(p.labels[i]) : ''}</span></a>`).join('');
+  return `${npBack('Today’s Paper', '#paper')}<div class="mast sm"><h1 style="font-size:30px">${esc(p.name)}</h1><div class="np-m">${new Date(p.at).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} · ${p.pages} pages</div><div class="mt8">${paperStatus(p)}</div></div><div class="rule2"></div>
+  ${tops.length ? `<div class="np-sec"><div class="np-st">Top stories in this paper</div>${tops.map((x) => `<a class="np-row" href="#pstory/${x.id}"><div class="grow"><div class="kick ${x.imp >= 5 ? 'red' : ''}">Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}${(p.readIds || []).includes(x.id) ? ' · read' : ''}</div><div class="hl3">${esc(x.h)}</div><div class="np-m">${esc(x.s)}</div></div></a>`).join('')}</div><div class="rule1"></div>` : ''}
+  <div class="np-sec"><div class="np-st">Pages</div><div class="np-pages">${pages}</div></div>`;
+}
+function viewPage(pid, i) {
+  const p = getPaper(pid); i = Number(i) || 0; if (!p) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This paper is no longer on this phone.</div>`;
+  const st = p.stories.filter((x) => x.pg === i); const read = p.readIds || [];
+  const text = S.pmode === 'text';
+  const boxes = st.filter((x) => x.box && x.box[2] > x.box[0] && x.box[3] > x.box[1]).map((x) => `<a class="pbox ${read.includes(x.id) ? 'rd' : ''}" href="#pstory/${x.id}" aria-label="${esc(x.h)}" style="top:${x.box[0] / 10}%;left:${x.box[1] / 10}%;height:${(x.box[2] - x.box[0]) / 10}%;width:${(x.box[3] - x.box[1]) / 10}%"></a>`).join('');
+  const strip = Array.from({ length: p.pages }, (_, k) => `<a href="#page/${pid}/${k}" class="${k === i ? 'on' : ''}"><img data-pimg="${pid}:${k}" alt=""><span>${k + 1}</span></a>`).join('');
+  setTimeout(() => $('#pstrip .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 50);
+  return `<div class="np-bar sp"><a href="#pdoc/${pid}" class="row" style="gap:2px">${ic('back', 18, 2)}Pages</a><b class="sm">${esc(p.name)} · Page ${i + 1} of ${p.pages}</b><span></span></div>
+  <div class="row" style="gap:6px;padding:8px 0"><button class="np-chip ${text ? '' : 'on'}" data-act="pmode" data-v="page">Page</button><button class="np-chip ${text ? 'on' : ''}" data-act="pmode" data-v="text">Text</button>${text ? '' : `<button class="np-chip" data-act="pzoom">${S.pzoom ? 'Fit to screen' : 'Zoom in'}</button>`}<span class="grow"></span>${i > 0 ? `<a class="np-chip" href="#page/${pid}/${i - 1}">‹</a>` : ''}${i < p.pages - 1 ? `<a class="np-chip" href="#page/${pid}/${i + 1}">›</a>` : ''}</div>
+  ${text ? (st.length ? st.map((x) => `<article class="np-sec"><div class="kick">${esc(x.k)}</div><a class="hl2" href="#pstory/${x.id}">${esc(x.h)}</a><div class="np-art">${x.b.split(/\n{2,}/).map((t) => `<p>${esc(t)}</p>`).join('')}</div></article><div class="rule1"></div>`).join('') : `<div class="empty">${p.readPages.includes(i) ? 'No news stories found on this page.' : 'This page is still being read.'}</div>`) :
+  `<div class="pp-wrap ${S.pzoom ? 'zoom' : ''}"><div class="pp"><img data-pimg="${pid}:${i}" alt="Page ${i + 1}">${boxes}</div></div><p class="np-m" style="text-align:center;margin:8px 0 0">${st.length ? 'Tap a story on the page to read it' : p.readPages.includes(i) ? 'No news stories found on this page' : 'Finding the stories on this page…'}</p>`}
+  <div class="pstrip" id="pstrip">${strip}</div>
+  ${!text && st.length ? `<div class="rule1"></div><div class="np-sec"><div class="np-st">On this page</div>${st.map((x) => `<a class="np-row" href="#pstory/${x.id}"><div class="grow"><div class="kick">${esc(x.k)}${read.includes(x.id) ? ' · read' : ''}</div><div class="hl3">${esc(x.h)}</div><div class="np-m">${esc(x.s)}</div></div></a>`).join('')}</div>` : ''}`;
+}
+function viewPStory(sid) {
+  const pid = (sid || '').split('-')[0]; const p = getPaper(pid); const x = p?.stories.find((y) => y.id === sid);
+  if (!x) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This story is no longer on this phone.</div>`;
+  markPaperRead(p, sid);
+  const order = [...p.stories].sort((a, b) => a.pg - b.pg || b.imp - a.imp); const k = order.indexOf(x); const nx = order[k + 1];
+  const paras = x.b.split(/\n{2,}/).filter(Boolean);
+  return `${npBack('Page ' + (x.pg + 1), `#page/${pid}/${x.pg}`)}<div class="rule2"></div>
+  <div class="kick red mt12">${esc(p.name)} · Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}</div>
+  <h1 class="art-h">${esc(x.h)}</h1>
+  ${x.s ? `<div class="np-box simple"><div class="kick ink">In simple words</div><p>${esc(x.s)}</p>${x.w ? `<p><b>For you:</b> ${esc(x.w)}</p>` : ''}</div>` : ''}
+  <div class="np-art dc">${paras.map((t) => `<p>${esc(t)}</p>`).join('')}</div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:16px"><a class="np-chip" href="#page/${pid}/${x.pg}">See it on the page</a><button class="np-chip" data-act="askpaper" data-id="${sid}">${ic('sparkle', 14)} Ask about this</button><button class="np-chip" data-act="pshare" data-id="${sid}">${ic('share', 14)} Share</button></div>
+  ${nx ? `<div class="rule1 mt20"></div><a class="np-row" href="#pstory/${nx.id}"><div class="grow"><div class="kick">Next story · page ${nx.pg + 1}</div><div class="hl3">${esc(nx.h)}</div></div>${ic('chev', 18)}</a>` : ''}`;
+}
+async function hydratePages() {
+  for (const im of document.querySelectorAll('img[data-pimg]')) { if (im.src) continue; const [id, i] = im.dataset.pimg.split(':'); const u = await pageUrl(id, Number(i)); if (u) im.src = u; else im.style.visibility = 'hidden'; }
+}
+
 // ---------- router ----------
-function route() { return (location.hash || '#home').slice(1).split('/'); }
+function route() { return (location.hash || '#front').slice(1).split('/'); }
+const TAB_OF = { front: 'front', home: 'front', '': 'front', paper: 'paper', pdoc: 'paper', page: 'paper', pstory: 'paper', sections: 'sections', section: 'sections', explore: 'sections', todo: 'sections', history: 'sections', saved: 'sections', factchecks: 'sections', videos: 'sections', search: 'sections', settings: 'sections', quick: 'sections', markets: 'markets', money: 'markets', grow: 'markets', calc: 'markets', guide: 'markets', learn: 'markets', ask: 'ask' };
 function render() {
-  const [r, a] = route(); const v = $('#view');
-  const map = { history: viewHistory, home: viewHome, quick: viewQuick, money: viewMoney, grow: viewGrow, ask: viewAsk, explore: viewExplore, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide };
+  const [r, a, c] = route(); const v = $('#view');
+  const map = { history: viewHistory, home: viewFront, front: viewFront, quick: viewQuick, grow: viewGrow, ask: viewAsk, explore: npSections, sections: npSections, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide, paper: viewPaper };
   let html;
-  if (r === 'todo' || (r === 'section' && a === 'events')) html = viewTodo(r === 'todo' ? (a || 'all') : 'all'); else if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read') html = viewRead(a, route()[2] != null ? Number(route()[2]) : null); else if (r === 'story') html = viewStory(a); else if (r === 'section') html = viewSection(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewHome)();
-  const tab = r === 'read' || r === 'web' ? S.lastTab : { home: 'home', quick: 'quick', money: 'money', grow: 'money', calc: 'money', guide: 'money', learn: 'money', ask: 'ask' }[r] || (r === 'story' ? S.lastTab : 'explore');
+  if (r === 'todo' || (r === 'section' && a === 'events')) html = viewTodo(r === 'todo' ? (a || 'all') : 'all'); else if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read' || r === 'story') html = viewRead(a, c != null ? Number(c) : null); else if (r === 'section') html = npSection(a); else if (r === 'markets' || r === 'money') html = npMarkets(a || 'all'); else if (r === 'pdoc') html = viewPaperDoc(a); else if (r === 'page') html = viewPage(a, c); else if (r === 'pstory') html = viewPStory(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewFront)();
+  const tab = r === 'read' || r === 'web' || r === 'story' ? S.lastTab : TAB_OF[r] || 'sections';
   if (!['story', 'read', 'web'].includes(r)) S.lastTab = tab;
   v.className = r === 'quick' ? 'full' : '';
   v.innerHTML = html;
+  hydratePages();
   setTimeout(() => { clientEditor().then(simplifyVisible); }, 300);
-  $('#navwrap').innerHTML = r === 'quick' ? '' : navHtml(tab || 'home');
+  $('#navwrap').innerHTML = r === 'quick' ? '' : navHtml(tab || 'front');
 }
 let lastHash = '';
 window.addEventListener('hashchange', () => {
@@ -881,7 +1092,7 @@ window.addEventListener('hashchange', () => {
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act; const id = b.dataset.id;
-  if (act === 'back') { if (history.length > 1) history.back(); else location.hash = '#home'; }
+  if (act === 'back') { if (history.length > 1) history.back(); else location.hash = '#front'; }
   else if (act === 'weather') weatherSheet();
   else if (act === 'relocate') { b.closest('.sheet-bg')?.remove(); toast('Finding your location…'); await loadWeather(true); render(); }
   else if (act === 'refresh') { const before = S.news?.updated; b.classList.add('spin'); await Promise.all([loadData(true), loadWeather(true)]); render(); toast(S.news?.updated !== before ? 'Latest news loaded' : 'You’re up to date'); }
@@ -906,6 +1117,11 @@ document.addEventListener('click', async (e) => {
   else if (act === 'setaccent') { S.settings.accent = b.dataset.v; applyTheme(); saveSettings(); render(); }
   else if (act === 'sec') { const s = S.settings.sections; S.settings.sections = s.includes(id) ? s.filter((x) => x !== id) : DEFAULT_SECTIONS.filter((x) => x === id || s.includes(x)); saveSettings(); render(); }
   else if (act === 'install' && S.installEvt) { S.installEvt.prompt(); S.installEvt = null; }
+  else if (act === 'pmode') { S.pmode = b.dataset.v; render(); }
+  else if (act === 'pzoom') { S.pzoom = !S.pzoom; render(); }
+  else if (act === 'presume') { const p = getPaper(id); if (p) resumePaper(p, S.settings.key, paperUpdate); render(); }
+  else if (act === 'pdel') { const p = getPaper(id); if (p && confirm(`Delete ${p.name} from this phone?`)) { await removePaper(id); render(); } }
+  else if (act === 'askpaper' || act === 'pshare') { const p = getPaper(id.split('-')[0]); const x = p?.stories.find((y) => y.id === id); if (!x) return; if (act === 'pshare') { const t = `${x.h}\n\n${x.s}\n\n— ${p.name}, page ${x.pg + 1}`; if (navigator.share) navigator.share({ title: x.h, text: t }).catch(() => {}); else window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank'); } else { location.hash = '#ask'; setTimeout(() => ask(`Explain this story from my newspaper: ${x.h}`, `STORY (from ${p.name}, page ${x.pg + 1}):\n${x.h}\n${x.b.slice(0, 6000)}`), 60); } }
   else if (act === 'clearread') { S.read = new Set(); LS.set('read', []); toast('Read history cleared'); }
 });
 document.addEventListener('submit', (e) => {
@@ -916,6 +1132,7 @@ document.addEventListener('submit', (e) => {
   else if (kind === 'ask' && val) ask(val);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && e.target.matches('.askbar textarea')) { e.preventDefault(); e.target.form.requestSubmit(); } });
+document.addEventListener('change', (e) => { if (e.target.dataset?.upload && e.target.files?.length) { const files = [...e.target.files]; e.target.value = ''; toast('Adding your newspaper…'); addPaper(files, S.settings.key, paperUpdate); setTimeout(render, 100); } });
 document.addEventListener('change', (e) => { const k = e.target.dataset?.set; if (!k) return; S.settings[k] = e.target.value.trim(); saveSettings(); if (k === 'key') toast('Key saved'); });
 let scrollT; window.addEventListener('scroll', () => { clearTimeout(scrollT); scrollT = setTimeout(simplifyVisible, 400); }, { passive: true });
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.installEvt = e; });
@@ -925,10 +1142,11 @@ document.addEventListener('visibilitychange', async () => {
 
 // ---------- start ----------
 (async function start() {
+  await loadPapers();
   render();
   await loadData();
   render();
-  loadWeather().then(() => { const [r] = route(); if (r === 'home' || r === '') render(); });
+  loadWeather().then(() => { const [r] = route(); if (['home', 'front', ''].includes(r)) render(); });
   if ('serviceWorker' in navigator) {
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => { reg.update(); setInterval(() => reg.update(), 30 * 6e4); }).catch(() => {});
@@ -940,6 +1158,6 @@ document.addEventListener('visibilitychange', async () => {
   setInterval(async () => {
     if (document.visibilityState !== 'visible') return;
     const before = S.news?.updated; await loadData(true);
-    if (S.news?.updated !== before) { const [r] = route(); if (['home', 'section', 'explore', 'money', ''].includes(r)) { const y = window.scrollY; render(); window.scrollTo(0, y); } toast('Fresh news just arrived'); }
+    if (S.news?.updated !== before) { const [r] = route(); if (['home', 'front', 'section', 'sections', 'markets', ''].includes(r)) { const y = window.scrollY; render(); window.scrollTo(0, y); } toast('Fresh news just arrived'); }
   }, 5 * 6e4);
 })();
