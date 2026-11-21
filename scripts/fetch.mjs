@@ -212,6 +212,7 @@ KW.events = /\b(things to do|weekend|events?|concerts?|gigs?|live music|exhibiti
 const INCIDENT = /\b(fire|fires|blaze|accident|collapse|killed|dead|dies|death|injured|police|arrest|incident|stampede|crash|brigade|rescue)\b/i;
 const TOPICAL = new Set(['events', 'markets', 'money', 'gold', 'bollywood', 'movies', 'viral', 'phones', 'gadgets', 'health', 'sports', 'knowledge', 'spiritual']);
 const SEC_BY_ID = Object.fromEntries(SECTIONS.map((x) => [x.id, x]));
+const INDIA_RE = /\b(india|indian|indians|delhi|mumbai|modi|bjp|congress|aap|kerala|tamil|bengal|bihar|uttar pradesh|maharashtra|gujarat|karnataka|punjab|rajasthan|odisha|assam|telangana|andhra|hyderabad|bengaluru|chennai|kolkata|lok sabha|rajya sabha|supreme court|high court|rupee|cbi|nia|isro|rbi|sebi|crore|lakh|epfo|neet|jee|upsc|kashmir|manipur|goa|pune|noida|gurugram|lucknow|patna|bhopal|jaipur)\b/i;
 function chooseSection(c) {
   const text = c.items.map((i) => i.title).join(' . ');
   const titles = c.items.map((i) => i.title).join(' . ');
@@ -247,6 +248,8 @@ function chooseSection(c) {
   }
   // a clear topic (two or more topic words) beats the general India and World buckets
   if (best && (best.id === 'india' || best.id === 'world') && strongTopic) return strongTopic;
+  // nothing Indian about it and it came from world feeds: it is world news
+  if ((!best || best.id === 'india' || best.id === 'sports' && !/\b(cricket|ipl|match|cup|league|tennis|football|hockey|olympic|kabaddi|chess|badminton|wicket|goal)\b/i.test(titles)) && !INDIA_RE.test(titles) && (votes.world || 0) >= 1) return SEC_BY_ID.world;
   return best || SEC_BY_ID.india;
 }
 
@@ -556,7 +559,7 @@ async function main() {
   const state = await readJson('state.json', { alerted: [], briefDate: '' }, CACHE);
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
-    const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i, idx) => { const main = u === 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' || u.includes('/topic/NATION'); const top = u.includes(TOP_FEED) || main; return { ...i, origin: sec.id, google: u.includes('news.google.com'), top, rank: main ? idx : top ? 25 + idx : null }; })));
+    const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i, idx) => { const main = u === 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' || u.includes('/topic/NATION'); const glob = /news\.google\.com\/rss\?hl=en-(GB|US)/.test(u); const top = u.includes(TOP_FEED) || main || glob; return { ...i, origin: sec.id, google: u.includes('news.google.com'), top, rank: main ? idx : glob ? 4 + idx * 1.5 : top ? 25 + idx : null }; })));
     const maxAge = sec.id === 'knowledge' || sec.id === 'events' ? 168 : (sec.id === 'movies' || sec.id === 'spiritual' || sec.id === 'phones') ? 96 : 48;
     return lists.flat().filter((i) => NOW - i.time < maxAge * 3.6e6 && !JUNK.test(i.title) && (!sec.exclude || !sec.exclude.test(i.title)));
   }));

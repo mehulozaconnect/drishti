@@ -129,7 +129,7 @@ export const SECTIONS = [
   {
     id: 'world', name: 'World', short: 'World', color: '#12203D', tint: '#9DB8F5', icon: 'globe', weight: 1.1,
     feeds: [
-      top('WORLD'), g('Russia Ukraine'), g('Pakistan army OR Balochistan OR Afghanistan'), g('China OR Taiwan OR Japan'), g('site:reuters.com'),
+      top('WORLD'), 'https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en', 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en', g('Russia Ukraine'), g('Pakistan army OR Balochistan OR Afghanistan'), g('China OR Taiwan OR Japan'), g('site:reuters.com'),
       'https://feeds.bbci.co.uk/news/world/rss.xml',
       'https://www.freepressjournal.in/stories.rss?section=world',
       'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml',

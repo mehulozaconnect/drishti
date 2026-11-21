@@ -479,7 +479,7 @@ async function simplifyVisible() {
   simpBusy = true; simpStatus(`${ic('sparkle', 14)} Making it simple…`);
   try {
     const out = await gem(`Rewrite each news item below in ${LANG_NAME[LANG()]}. The reader is busy and wants to understand it in one quick read.
-Rules: keep every fact exactly as given, do not add anything new; headline max 10 words; summary 40 to 60 words in 3 or 4 short sentences; say what happened, then why it matters to an ordinary person in India.
+Rules: keep every fact exactly as given, do not add anything new; never change who did what to whom (who threatened, who was arrested, who said what) — if unsure keep the original wording; headline max 12 words; summary 40 to 60 words in 3 or 4 short sentences; say what happened, then why it matters to an ordinary person in India.
 Return JSON: [{"id":"...","h":"headline","t":"summary"}]
 
 ${todo.map((s) => JSON.stringify({ id: s.id, headline: s.headline || s.title, summary: s.summary })).join('\n')}`);
@@ -1104,7 +1104,7 @@ const ED_MIX = [['mumbai', 4], ['india', 4], ['world', 3], ['markets', 2], ['mon
 function buildEdition(force) {
   const n = S.news; if (!n) return null;
   const key = edKey();
-  if (!force && S.ed?.key === key && S.ed.ids?.length) { S.ed.ids = S.ed.ids.filter((id) => id.startsWith('p') || S.byId[id] || id === 'money'); return S.ed; }
+  if (!force && S.ed?.key === key && S.ed.ids?.length && S.ed.v === 2) { S.ed.ids = S.ed.ids.filter((id) => id.startsWith('p') || S.byId[id] || ['money', 'trend', 'viral'].includes(id)); return S.ed; }
   const picked = []; const has = (s) => picked.includes(s);
   const per = {}; const cap = Object.fromEntries(ED_MIX);
   const add = (s) => { if (!s || has(s) || (s.summary || '').length < 80) return false; if (picked.some((x) => similar2(x.title, s.title))) return false; picked.push(s); per[s.section] = (per[s.section] || 0) + 1; return true; };
@@ -1117,20 +1117,32 @@ function buildEdition(force) {
   const pap = paperStories().filter((x) => x.imp >= 5).slice(0, 2).map((x) => x.id);
   ids.splice(2, 0, ...pap);
   ids.splice(Math.min(6, ids.length), 0, 'money');
-  S.ed = { key, ids, pos: 0, ai: {}, done: false, started: 0, quiz: null, lang: LANG() };
+  ids.splice(Math.min(3, ids.length), 0, 'trend');
+  if (secStories('viral').length) ids.splice(Math.max(0, ids.length - 3), 0, 'viral');
+  // breaking news always opens the edition
+  const brk = picked.filter(isBreaking).map((s) => s.id);
+  for (const id of brk.reverse()) { const k = ids.indexOf(id); if (k > 0) { ids.splice(k, 1); ids.unshift(id); } }
+  S.ed = { v: 2, key, ids, pos: 0, ai: {}, done: false, started: 0, quiz: null, lang: LANG() };
   saveEd(); return S.ed;
 }
 const edRank = (s) => s.score * (s.rank != null ? 2 - Math.min(s.rank, 30) / 30 : 1) * (s.n > 1 ? 1.2 : 1);
 const words2 = (t) => new Set((t || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 3));
 function similar2(a, b) { const A = words2(a), B = words2(b); let c = 0; for (const w of A) if (B.has(w)) c++; return c / Math.max(1, Math.min(A.size, B.size)) >= 0.5; }
-const edItem = (id) => id === 'money' ? { type: 'money' } : id.startsWith('p') ? (() => { const x = paperStories().find((y) => y.id === id); return x ? { type: 'paper', x } : null; })() : S.byId[id] ? { type: 'story', s: S.byId[id] } : null;
+const edItem = (id) => id === 'money' ? { type: 'money' } : id === 'trend' ? (trendList().length >= 3 ? { type: 'trend' } : null) : id === 'viral' ? (viralList().length ? { type: 'viral' } : null) : id.startsWith('p') ? (() => { const x = paperStories().find((y) => y.id === id); return x ? { type: 'paper', x } : null; })() : S.byId[id] ? { type: 'story', s: S.byId[id] } : null;
+function trendList() {
+  const inEd = new Set(S.ed?.ids || []);
+  return S.news.stories.filter((s) => s.rank != null && Date.now() - s.time < 18 * 3.6e6 && !inEd.has(s.id) && !['events', 'knowledge'].includes(s.section)).sort((a, b) => a.rank - b.rank || b.n - a.n).filter((s, i, arr) => !arr.slice(0, i).some((x) => similar2(x.title, s.title))).slice(0, 6);
+}
+const viralList = () => unread(secStories('viral')).concat((S.news.videos || []).slice(0, 0)).slice(0, 4);
 const edItems = () => (S.ed?.ids || []).map(edItem).filter(Boolean);
-const sentences = (t) => (t || '').replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+["’”]?(\s|$)/g)?.map((x) => x.trim()) || [t];
+const isBreaking = (s) => Date.now() - s.first < 4 * 3.6e6 && ((s.rank != null && s.rank < 3 && s.n >= 2) || (s.breaking && s.n >= 4));
+const cleanTitle = (s) => (s.title || '').replace(/\s+[-|–]\s+[^-|–]{2,40}$/, '').trim();
+const sentences = (t) => { const x = (t || '').replace(/\s+/g, ' ').replace(/^([A-Z]) ([a-z])/, '$1$2').trim(); const out = []; let cur = ''; for (const part of x.split(/(?<=[.!?]["’”]?)\s+(?=[A-Z0-9“"‘])/)) { cur += (cur ? ' ' : '') + part; if (!/\b(Mr|Mrs|Ms|Dr|St|No|vs|Sr|Jr|Lt|Col|Gen|Prof|Rs|Govt|Dept)\.$/.test(cur)) { out.push(cur); cur = ''; } } if (cur) out.push(cur); return out.length ? out : [t]; };
 function edText(it) {
   if (it.type === 'paper') { const x = it.x; const ss = sentences(x.s || x.b); return { h: x.h, a: ss[0] || '', b: ss[1] || '', y: x.w || '', src: `${x.paper}, page ${x.pg + 1}`, sec: x.place || 'Paper' }; }
   const s = it.s; const ai = S.ed?.ai?.[s.id];
-  if (ai) return { h: ai.h || H(s), a: ai.a, b: ai.b, y: ai.y, src: s.sources.slice(0, 2).map((x) => x.name).join(', ') + (s.n > 2 ? ` + ${s.n - 2}` : ''), sec: edSec(s) };
-  const ss = sentences(T(s)); return { h: H(s), a: ss[0] || '', b: ss[1] || '', y: '', src: s.sources.slice(0, 2).map((x) => x.name).join(', ') + (s.n > 2 ? ` + ${s.n - 2}` : ''), sec: edSec(s) };
+  if (ai) return { h: cleanTitle(s), a: ai.a, b: ai.b, y: ai.y, src: s.sources.slice(0, 2).map((x) => x.name).join(', ') + (s.n > 2 ? ` + ${s.n - 2}` : ''), sec: edSec(s) };
+  const ss = sentences(T(s)); return { h: cleanTitle(s), a: ss[0] || '', b: ss[1] || '', y: '', src: s.sources.slice(0, 2).map((x) => x.name).join(', ') + (s.n > 2 ? ` + ${s.n - 2}` : ''), sec: edSec(s) };
 }
 let edAiBusy = false;
 async function edAi() {
@@ -1139,10 +1151,10 @@ async function edAi() {
   try {
     const out = await gem(`You are the editor of a friendly morning news app for a busy reader in Mumbai (Malad West, commutes to Andheri East, invests in SIPs and gold).
 For each story write in ${LANG_NAME[LANG()]}:
-"h": a clear headline, max 12 words, no clickbait;
 "a" and "b": two short sentences that tell what happened and the key detail (max 22 words each);
 "y": one line on what it means for this reader in Mumbai, only if it really affects him, else "".
-Use only the facts given. Return JSON: [{"id":"","h":"","a":"","b":"","y":""}]
+Use only the facts given. Never change who did what to whom; keep names, numbers and roles exactly as in the text.
+Return JSON: [{"id":"","a":"","b":"","y":""}]
 
 ${JSON.stringify(want.map((s) => ({ id: s.id, title: s.title, text: (s.summary || '').slice(0, 600) })))}`);
     const arr = JSON.parse(out.replace(/^```(json)?|```$/g, '').trim());
@@ -1164,9 +1176,9 @@ function viewEdition() {
   const head = `<div class="ed-top"><span>${date}</span><span class="row" style="gap:6px">${wx}<a class="np-ib" href="#settings" aria-label="Settings">${ic('settings', 18)}</a></span></div>`;
   if (!n) return `<div class="ed">${head}<div class="ed-hi">${greet}${S.settings.name ? ',<br>' + esc(S.settings.name) : ''}</div><p class="ed-sub">Getting today’s edition ready…</p></div>`;
   const ed = buildEdition(); setTimeout(edAi, 200);
-  const items = edItems(); const stories = items.filter((it) => it.type !== 'money');
+  const items = edItems(); const stories = items.filter((it) => it.type === 'story' || it.type === 'paper');
   const mins = Math.max(4, Math.round(stories.length * 0.5));
-  const lead = items.find((it) => it.type !== 'money'); const L = lead ? edText(lead) : null;
+  const lead = items.find((it) => it.type === 'story' || it.type === 'paper'); const L = lead ? edText(lead) : null;
   const leadImg = lead?.type === 'story' ? lead.s.image : null;
   const pos = Math.min(ed.pos || 0, items.length);
   const counts = {}; for (const it of stories) { const sec = edText(it).sec; const k = /Market|Money|Gold/.test(sec) ? 'Money' : ['Mumbai', 'India', 'World'].includes(sec) ? sec : 'More'; counts[k] = (counts[k] || 0) + 1; }
@@ -1204,11 +1216,17 @@ function moneyCard() {
   <div class="ed-mt">${g ? `<div><span>Gold 24K · 10g</span><b>${rs(g.price)}</b><em class="${g.pct >= 0 ? 'up' : 'down'}">${pct(g.pct)}</em></div>` : ''}${q.silver ? `<div><span>Silver · 1kg</span><b>${rs(q.silver.price)}</b><em class="${q.silver.pct >= 0 ? 'up' : 'down'}">${pct(q.silver.pct)}</em></div>` : ''}${se ? `<div><span>Sensex</span><b>${num(se.price, 0)}</b><em class="${se.pct >= 0 ? 'up' : 'down'}">${pct(se.pct)}</em></div>` : ''}${q.usdinr ? `<div><span>Dollar</span><b>₹${num(q.usdinr.price)}</b><em class="${q.usdinr.pct <= 0 ? 'up' : 'down'}">${q.usdinr.pct <= 0 ? 'Rupee up' : 'Rupee down'}</em></div>` : ''}</div>
   ${forYou ? `<div class="ed-you dark"><b>For you:</b> ${forYou}</div>` : ''}<a class="ed-m" href="#markets" style="display:block;margin-top:14px;color:#F2C14E">All markets ›</a></div></div>`;
 }
+function listCard(kind) {
+  const trend = kind === 'trend'; const list = trend ? trendList() : viralList();
+  const row = (s, k) => `<a class="ed-tr" href="#read/${s.id}"><span class="ed-trn">${k + 1}</span><div class="grow"><b>${esc(cleanTitle(s))}</b><em>${esc(secName(s.section))} · ${esc(s.sources[0]?.name || '')} · ${ago(s.time)}${s.n > 2 ? ' · ' + s.n + ' sources' : ''}</em></div>${s.image ? `<img src="${esc(s.image)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</a>`;
+  return `<div class="ed-card list ${trend ? 'tr' : 'vi'}"><div class="ed-in"><span class="ed-chip" style="background:${trend ? '#2A1E3D' : '#3D1E2E'};color:${trend ? '#C9B3FF' : '#FFB3D1'}">${trend ? '🔥 TRENDING NOW' : '📱 VIRAL TODAY'}</span>
+  <div class="ed-h" style="color:#FBF6EE;margin-top:14px">${trend ? 'What everyone is reading' : 'Going viral'}</div><p class="ed-p" style="color:#C9C0D6;margin-bottom:10px">${trend ? 'Top stories on Google News right now, from BBC, Al Jazeera, Reuters and Indian papers.' : 'The videos and posts people are sharing today.'}</p>${list.map(row).join('')}</div></div>`;
+}
 function storyCard2(it) {
   const t = edText(it); const tn = tone(t.sec);
   const img = it.type === 'story' ? it.s.image : null;
   const href = it.type === 'story' ? `#read/${it.s.id}` : `#pstory/${it.x.id}`;
-  return `<div class="ed-card">${edPhoto(img, t.sec, 380)}<div class="ed-sheet"><div class="row" style="gap:8px"><span class="ed-chip" style="background:${tn[0]};color:${tn[1]}">${esc(t.sec.toUpperCase())}</span><span class="ed-m">${esc(t.src)}${it.type === 'story' ? ' · ' + ago(it.s.time) : ''}</span></div>
+  return `<div class="ed-card">${edPhoto(img, t.sec, 380)}<div class="ed-sheet"><div class="row" style="gap:8px">${it.type === 'story' && isBreaking(it.s) ? '<span class="ed-chip red">BREAKING</span>' : ''}<span class="ed-chip" style="background:${tn[0]};color:${tn[1]}">${esc(t.sec.toUpperCase())}</span><span class="ed-m">${esc(t.src)}${it.type === 'story' ? ' · ' + ago(it.s.time) : ''}</span></div>
   <div class="ed-h">${esc(t.h)}</div>
   <div class="ed-pts">${t.a ? `<div><i style="color:${tn[3]}">●</i><span>${esc(t.a)}</span></div>` : ''}${t.b ? `<div><i style="color:${tn[3]}">●</i><span>${esc(t.b)}</span></div>` : ''}</div>
   ${t.y ? `<div class="ed-you" style="background:${tn[0]};color:${tn[1]}"><b>For you:</b> ${esc(t.y)}</div>` : ''}
@@ -1223,7 +1241,7 @@ function viewCard(i) {
   const it = items[i]; if (it.type === 'story') markRead(it.s.id); if (it.type === 'paper') { const p = getPaper(it.x.pid); if (p) markPaperRead(p, it.x.id); }
   const bars = items.map((_, k) => `<i class="${k < i ? 'd' : k === i ? 'c' : ''}"></i>`).join('');
   setTimeout(edSwipe, 0); setTimeout(edAi, 300);
-  return `<div class="ed-stage ${it.type === 'money' ? 'dark' : ''}" id="edstage" data-i="${i}" data-n="${items.length}"><div class="ed-bars">${bars}</div><div class="ed-hd"><span>${i + 1} of ${items.length}</span><a href="#edition" aria-label="Close">${ic('x', 20, 2.2)}</a></div>${it.type === 'money' ? moneyCard() : storyCard2(it)}<div class="ed-hint">Tap right or swipe for next</div></div>`;
+  return `<div class="ed-stage ${['money', 'trend', 'viral'].includes(it.type) ? 'dark' : ''}" id="edstage" data-i="${i}" data-n="${items.length}"><div class="ed-bars">${bars}</div><div class="ed-hd"><span>${i + 1} of ${items.length}</span><a href="#edition" aria-label="Close">${ic('x', 20, 2.2)}</a></div>${it.type === 'money' ? moneyCard() : it.type === 'trend' || it.type === 'viral' ? listCard(it.type) : storyCard2(it)}<div class="ed-hint">Tap right or swipe for next</div></div>`;
 }
 function edSwipe() {
   const st = $('#edstage'); if (!st || st.dataset.b) return; st.dataset.b = 1;
@@ -1255,7 +1273,7 @@ function viewEdDone() {
   const ed = S.ed; if (!ed.done) { ed.done = true; const days = LS.get('streak', []); const today = new Date().toISOString().slice(0, 10); if (!days.includes(today)) days.push(today); LS.set('streak', days.slice(-60)); }
   if (!ed.quiz) ed.quiz = makeQuiz(); saveEd();
   const days = new Set(LS.get('streak', [])); let streak = 0; for (let d = new Date(); days.has(d.toISOString().slice(0, 10)); d = new Date(d - 864e5)) streak++;
-  const n = edItems().filter((it) => it.type !== 'money').length; const mins = ed.started ? Math.max(1, Math.round((Date.now() - ed.started) / 6e4)) : null;
+  const n = edItems().filter((it) => it.type === 'story' || it.type === 'paper').length; const mins = ed.started ? Math.max(1, Math.round((Date.now() - ed.started) / 6e4)) : null;
   const quiz = ed.quiz.map((q, k) => `<div class="ed-q"><div class="ed-lab">QUESTION ${k + 1} OF ${ed.quiz.length}</div><div class="ed-qq">${esc(q.q)}</div><div class="ed-qo">${q.o.map((o) => `<button data-act="quiz" data-q="${k}" data-v="${esc(o)}" class="${q.pick == null ? '' : o === q.a ? 'ok' : o === q.pick ? 'no' : ''}">${esc(o)}${q.pick != null && o === q.a ? ' ✓' : ''}</button>`).join('')}</div></div>`).join('');
   const score = ed.quiz.filter((q) => q.pick === q.a).length; const answered = ed.quiz.every((q) => q.pick != null);
   return `<div class="ed" style="padding-top:34px"><div class="ed-tick">✓</div><div class="ed-hi" style="text-align:center;font-size:30px">You’re done for the ${isMorning() ? 'morning' : 'evening'}</div><p class="ed-sub" style="text-align:center">${n} stories${mins ? ` in ${mins} min` : ''}${streak > 1 ? ` · ${streak}-day streak 🔥` : ''}</p>
@@ -1266,11 +1284,12 @@ function viewEdDone() {
 // ---------- listen: the edition read aloud ----------
 const TTS = { on: false, i: 0, rate: Number(LS.get('ttsRate', 1)) };
 function ttsScript() {
-  const items = edItems(); const n = items.filter((it) => it.type !== 'money').length;
+  const items = edItems(); const n = items.filter((it) => it.type === 'story' || it.type === 'paper').length;
   const out = [{ t: `${new Date().getHours() < 12 ? 'Good morning' : 'Hello'} ${S.settings.name || ''}. Here is your Drishti ${isMorning() ? 'morning' : 'evening'} edition, with ${n} stories.`, h: 'Introduction', sec: '' }];
   let k = 0;
   for (const it of items) {
     if (it.type === 'money') { out.push({ t: 'Your money minute. ' + marketLine(Q()), h: 'Money minute', sec: 'Money' }); continue; }
+    if (it.type === 'trend' || it.type === 'viral') { const l = it.type === 'trend' ? trendList() : viralList(); out.push({ t: (it.type === 'trend' ? 'Trending right now. ' : 'Going viral today. ') + l.slice(0, 4).map((s) => cleanTitle(s) + '.').join(' '), h: it.type === 'trend' ? 'Trending now' : 'Viral today', sec: '' }); continue; }
     const t = edText(it); k++;
     out.push({ t: `Story ${k}. ${t.sec}. ${t.h}. ${t.a} ${t.b} ${t.y ? 'What it means for you: ' + t.y : ''}`, h: t.h, sec: t.sec });
   }
