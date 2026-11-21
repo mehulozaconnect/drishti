@@ -1,3 +1,11 @@
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:500;font-display:swap;src:url(../fonts/plus-jakarta-sans-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:600;font-display:swap;src:url(../fonts/plus-jakarta-sans-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:700;font-display:swap;src:url(../fonts/plus-jakarta-sans-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:800;font-display:swap;src:url(../fonts/plus-jakarta-sans-latin-800-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/inter-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(../fonts/inter-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(../fonts/inter-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-style:normal;font-weight:700;font-display:swap;src:url(../fonts/inter-latin-700-normal.woff2) format('woff2')}
 :root{
   --bg:#0D0E12; --card:#15171D; --card2:#1B1E25; --line:#23262E; --line2:#2E323B;
   --text:#F4F2EE; --text2:#C9CCD3; --muted:#9097A3; --faint:#6B717C;
@@ -5,7 +13,7 @@
   --up:#3DD68C; --up-bg:#123F2C; --down:#FF6B6B; --down-bg:#3F1616;
   --ok:#7BF0B4; --ok-bg:#123F2C; --warn:#FFC857; --warn-bg:#3D2E0C; --bad:#FF8A8A; --bad-bg:#401A1A;
   --violet:#C7BAFF; --violet-bg:#221A3F;
-  --serif:'Fraunces',Georgia,serif; --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --serif:'Plus Jakarta Sans',system-ui,sans-serif; --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --r:16px; --nav:72px; --safe-b:env(safe-area-inset-bottom,0px);
   color-scheme:dark;
 }
@@ -273,10 +281,10 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
   --up:#1E7A3C; --up-bg:#DCEEDD; --down:#B3261E; --down-bg:#F5DCD8;
   --ok:#1E7A3C; --ok-bg:#DCEEDD; --warn:#8A5A00; --warn-bg:#F6EBC8; --bad:#B3261E; --bad-bg:#F5DCD8;
   --violet:#4B3BA8; --violet-bg:#E8E3F4;
-  --serif:'Playfair Display',Georgia,serif;
+  --serif:'Plus Jakarta Sans',system-ui,sans-serif;
   color-scheme:light;
 }
-:root{--head:'Playfair Display',Georgia,serif;--body:'Source Serif 4',Georgia,serif;--ink:var(--text);--red:#B3261E}
+:root{--head:'Plus Jakarta Sans',system-ui,sans-serif;--body:'Inter',system-ui,sans-serif;--ink:var(--text);--red:#B3261E}
 :root[data-mode=dark]{--red:#FF7A6E}
 :root[data-theme=paper] .card,:root[data-theme=paper] .chip{border-radius:10px}
 .okc{color:var(--up)} .redc{color:var(--red)} .b{font-weight:700} .sm{font-size:13px}
@@ -435,14 +443,14 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 .ed{font-family:var(--sans);color:#17140F;padding-bottom:20px}
 :root[data-mode=dark] .ed{color:var(--text)}
 .ed-top{display:flex;justify-content:space-between;align-items:center;padding-top:14px;font-size:11.5px;font-weight:600;letter-spacing:.5px;color:var(--muted)}
-.ed-hi{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:34px;line-height:1.08;letter-spacing:-.6px;margin-top:14px}
+.ed-hi{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-weight:600;font-size:34px;line-height:1.08;letter-spacing:-.6px;margin-top:14px}
 .ed-sub{font-size:15px;line-height:1.5;color:var(--text2);margin:8px 0 0}
 .ed-chip{display:inline-flex;align-items:center;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:999px;letter-spacing:.2px;white-space:nowrap}
 .ed-chip.light{background:var(--card);border:1px solid var(--line);color:var(--text2);font-weight:600;letter-spacing:0}
 .ed-chip.red{background:#E8452C;color:#fff}
 .ed-lead{display:block;position:relative;margin-top:16px;border-radius:24px;overflow:hidden;box-shadow:0 10px 28px rgba(60,40,10,.18)}
 .ed-lead-t{position:absolute;left:16px;right:16px;bottom:14px;color:#fff}
-.ed-lead-t div{font-family:'Fraunces',Georgia,serif;font-size:22px;font-weight:600;line-height:1.18;margin-top:8px;text-shadow:0 1px 8px rgba(0,0,0,.3)}
+.ed-lead-t div{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:22px;font-weight:600;line-height:1.18;margin-top:8px;text-shadow:0 1px 8px rgba(0,0,0,.3)}
 .ed-ph{position:relative;overflow:hidden}
 .ed-ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .ed-ph i{position:absolute;left:0;right:0;bottom:0;height:60%;background:linear-gradient(transparent,rgba(0,0,0,.6))}
@@ -471,7 +479,7 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 .ed-card{position:absolute;inset:0;display:flex;flex-direction:column}
 .ed-card .ed-ph{flex:none}
 .ed-sheet{position:absolute;top:340px;left:0;right:0;bottom:0;background:#FBF6EE;border-radius:26px 26px 0 0;padding:20px 22px 0;display:flex;flex-direction:column;overflow:hidden}
-.ed-h{font-family:'Fraunces',Georgia,serif;font-size:25px;font-weight:600;line-height:1.16;letter-spacing:-.3px;margin-top:10px;color:#17140F}
+.ed-h{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:25px;font-weight:600;line-height:1.16;letter-spacing:-.3px;margin-top:10px;color:#17140F}
 .ed-pts{margin-top:10px;display:flex;flex-direction:column;gap:9px;font-size:15.5px;line-height:1.45;color:#2E2921}
 .ed-pts div{display:flex;gap:10px} .ed-pts i{font-style:normal;font-size:10px;margin-top:5px}
 .ed-p{font-size:15px;line-height:1.5;margin:10px 0 0}
@@ -491,7 +499,7 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 .ed-tick{width:84px;height:84px;border-radius:42px;background:#E3F1EC;color:#138A4B;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700}
 .ed-quiz{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:4px 16px 16px;margin-top:20px}
 .ed-q{margin-top:12px}
-.ed-qq{font-family:'Fraunces',Georgia,serif;font-size:18px;font-weight:600;line-height:1.3;margin-top:6px}
+.ed-qq{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:18px;font-weight:600;line-height:1.3;margin-top:6px}
 .ed-qo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .ed-qo button{border:1.5px solid var(--line);border-radius:12px;padding:11px 10px;font-weight:600;font-size:14px;text-align:left}
 .ed-qo button.ok{border-color:#138A4B;background:#E3F1EC;color:#0F6B4E}
@@ -500,9 +508,9 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 #view.radio{background:linear-gradient(180deg,#2B2118,#14110D);min-height:100dvh;color:#FBF6EE;padding-bottom:30px}
 .ed-radio{padding-top:14px}
 .ed-cover{margin:22px auto 0;width:210px;height:210px;border-radius:28px;background:linear-gradient(140deg,#F2994A,#B5543A);display:flex;flex-direction:column;justify-content:flex-end;padding:18px;box-shadow:0 20px 40px rgba(0,0,0,.4)}
-.ed-cover div{font-family:'Fraunces',Georgia,serif;font-size:26px;font-weight:700;line-height:1.05}
+.ed-cover div{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:26px;font-weight:700;line-height:1.05}
 .ed-cover span{font-size:12px;opacity:.85;margin-top:4px}
-.ed-now{font-family:'Fraunces',Georgia,serif;font-size:20px;font-weight:600;text-align:center;margin-top:22px;line-height:1.25;min-height:50px}
+.ed-now{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:20px;font-weight:600;text-align:center;margin-top:22px;line-height:1.25;min-height:50px}
 .ed-ctl{display:flex;justify-content:center;align-items:center;gap:34px;margin-top:18px;font-size:22px}
 .ed-ctl button{color:#A99E8C;font-size:22px}
 .ed-ctl .play{width:66px;height:66px;border-radius:33px;background:#FBF6EE;color:#14110D;font-size:24px}
@@ -525,3 +533,12 @@ table.t th{font-size:12px;color:var(--muted);font-weight:500}
 .ed-tr b{display:block;font-size:15px;line-height:1.3;font-weight:600;color:#FBF6EE}
 .ed-tr em{display:block;font-style:normal;font-size:11.5px;color:#9D93AE;margin-top:3px}
 .ed-tr img{width:62px;height:62px;border-radius:10px;object-fit:cover;flex:none}
+
+/* one modern, clean type family: Plus Jakarta Sans headlines, Inter text */
+.mast h1{font-weight:800;letter-spacing:-1.2px}
+.hl1,.hl2,.hl3,.hl4,.art-h,.np-st,.np-tt,.pd-name,.ed-h,.ed-hi,.ed-qq,.ed-now,.ed-lead-t div,.ed-cover div,.np-up h3{font-weight:700;letter-spacing:-.3px}
+.hl1{font-size:26px;line-height:1.18} .art-h{font-size:26px;line-height:1.2} .hl3{font-size:16.5px;line-height:1.3} .hl4{font-size:15px;line-height:1.32}
+.ed-hi{font-weight:800;letter-spacing:-.8px} .ed-h{font-size:23px;line-height:1.22}
+.np-p,.np-box p{font-size:15px;line-height:1.55} .np-art p,.np-art .rp{font-size:16.5px;line-height:1.7}
+.art-deck,.np-quote p{font-style:normal}
+.np-art.dc > p:first-of-type::first-letter{font-weight:800;font-size:50px}
