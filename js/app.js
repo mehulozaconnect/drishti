@@ -1,7 +1,7 @@
 import { THOUGHTS, TIPS, GUIDE, LEARN } from './content.js';
 import { CALCS, inr, dur, monthsToGoal, sipForGoal, fvSip } from './grow.js';
 import { PLACES, COST, COST_HINT } from './todo.js';
-import { PAPERS, today, loadPapers, removePaper, pageUrl, getPaper, markPaperRead, addPaper, resumePaper, isBusy, ensureBody } from './paper.js';
+import { PAPERS, today, loadPapers, removePaper, pageUrl, getPaper, markPaperRead, addPaper, resumePaper, isBusy, ensureBody, explainStory } from './paper.js';
 
 // ---------- small helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -1064,20 +1064,32 @@ function viewPage(pid, i) {
   <div class="pstrip" id="pstrip">${strip}</div>
   ${!text && st.length ? `<div class="rule1"></div><div class="np-sec"><div class="np-st">On this page</div>${st.map((x) => `<a class="np-row" href="#pstory/${x.id}"><div class="grow"><div class="kick">${esc(x.k)}${read.includes(x.id) ? ' · read' : ''}</div><div class="hl3">${esc(x.h)}</div><div class="np-m">${esc(x.s)}</div></div></a>`).join('')}</div>` : ''}`;
 }
+const looksBroken = (b) => { const ps = (b || '').split(/\n{2,}/).filter(Boolean); const w = (b || '').split(/\s+/).length; return w < 110 || ps.filter((x) => x.split(/\s+/).length < 7).length >= 2; };
+const paraHtml = (b) => (b || '').split(/\n{2,}/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join('');
+const exHtml = (t) => t.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => /^(what happened|the background|background|why it matters( to you)?|what happens next|what next)\s*:?$/i.test(l.replace(/[*#]/g, '').trim()) ? `<div class="kick ink mt12">${esc(l.replace(/[*#:]/g, '').trim())}</div>` : `<p>${esc(l.replace(/^[-*•]\s*/, ''))}</p>`).join('');
 function viewPStory(sid) {
   const pid = (sid || '').split('-')[0]; const p = getPaper(pid); const x = p?.stories.find((y) => y.id === sid);
   if (!x) return `${npBack('Today’s Paper', '#paper')}<div class="empty">This story is no longer on this phone.</div>`;
   markPaperRead(p, sid);
   const order = [...p.stories].sort((a, b) => a.pg - b.pg || b.imp - a.imp); const k = order.indexOf(x); const nx = order[k + 1];
-  const paras = (x.b || '').split(/\n{2,}/).filter(Boolean);
-  if (!x.b) setTimeout(async () => { const box = $('#pbody'); if (!box) return; try { await ensureBody(p, x, S.settings.key); if ($('#pbody') === box) box.innerHTML = x.b.split(/\n{2,}/).filter(Boolean).map((t) => `<p>${esc(t)}</p>`).join(''); } catch (e) { if ($('#pbody') === box) box.innerHTML = `<p class="np-m">Could not load the full text right now. <a href="#page/${pid}/${x.pg}">Read it on the page</a>.</p>`; } }, 0);
-  return `${npBack('Page ' + (x.pg + 1), `#page/${pid}/${x.pg}`)}<div class="rule2"></div>
+  const key = S.settings.key;
+  const fix = key && !x.fixed && (!x.b || looksBroken(x.b));
+  // complete the text from the page picture when the PDF text came out broken or short
+  if (fix) setTimeout(async () => { const box = $('#pbody'); if (!box) return; try { await ensureBody(p, x, key, true); x.fixed = 1; if ($('#pbody') === box) { box.innerHTML = paraHtml(x.b); $('#pfix')?.remove(); loadEx(); } } catch (e) { x.fixed = 1; $('#pfix')?.remove(); if (!x.b && $('#pbody') === box) box.innerHTML = `<p class="np-m">Could not get the full text right now. Try again in a minute.</p>`; } }, 0);
+  const loadEx = async () => { const box = $('#pex'); if (!box || !key || !x.b) return; try { await explainStory(p, x, key); if ($('#pex') === box) box.innerHTML = `<div class="kick red">Explained</div>${exHtml(x.ex)}`; } catch { if ($('#pex') === box) box.innerHTML = `<button class="np-chip" data-act="pexplain" data-id="${sid}">${ic('sparkle', 14)} Explain this story in detail</button>`; } };
+  if (!fix) setTimeout(loadEx, 0);
+  const exBox = key ? `<div class="np-box simple" id="pex">${x.ex ? `<div class="kick red">Explained</div>${exHtml(x.ex)}` : `<div class="kick red">Explained</div><div class="col gap8 mt8">${[100, 92, 96, 70].map((w) => `<div class="skel" style="height:13px;width:${w}%"></div>`).join('')}</div>`}</div>` : (x.s ? `<div class="np-box simple"><div class="kick ink">In short</div><p>${esc(x.s)}</p></div>` : '');
+  return `${npBack(p.labels[x.pg] ? `Page ${x.pg + 1} · ${p.labels[x.pg]}` : 'Page ' + (x.pg + 1), `#page/${pid}/${x.pg}`)}<div class="rule2"></div>
   <div class="kick red mt12">${esc(p.name)} · Page ${x.pg + 1}${x.k ? ' · ' + esc(x.k) : ''}</div>
   <h1 class="art-h">${esc(x.h)}</h1>
-  ${x.s && (!p.text?.[x.pg] || (p.enriched || []).includes(x.pg)) ? `<div class="np-box simple"><div class="kick ink">In simple words</div><p>${esc(x.s)}</p>${x.w ? `<p><b>For you:</b> ${esc(x.w)}</p>` : ''}</div>` : ''}
-  <div class="np-art dc" id="pbody">${paras.length ? paras.map((t) => `<p>${esc(t)}</p>`).join('') : `<div class="col gap8">${[100, 96, 98, 70, 100, 85].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div><p class="np-m mt8">Getting the full text from the page…</p>`}</div>
-  <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:16px"><a class="np-chip" href="#page/${pid}/${x.pg}">See it on the page</a><button class="np-chip" data-act="askpaper" data-id="${sid}">${ic('sparkle', 14)} Ask about this</button><button class="np-chip" data-act="pshare" data-id="${sid}">${ic('share', 14)} Share</button></div>
-  ${nx ? `<div class="rule1 mt20"></div><a class="np-row" href="#pstory/${nx.id}"><div class="grow"><div class="kick">Next story · page ${nx.pg + 1}</div><div class="hl3">${esc(nx.h)}</div></div>${ic('chev', 18)}</a>` : ''}`;
+  ${x.w ? `<div class="art-ver"><span><b>For you:</b> ${esc(x.w)}</span></div>` : ''}
+  ${exBox}
+  <div class="np-st mt20">The full story</div>
+  ${fix ? `<p class="np-m" id="pfix">Getting the complete text from the page…</p>` : ''}
+  <div class="np-art dc" id="pbody">${x.b ? paraHtml(x.b) : `<div class="col gap8">${[100, 96, 98, 70, 100, 85].map((w) => `<div class="skel" style="height:14px;width:${w}%"></div>`).join('')}</div>`}</div>
+  ${!key ? `<p class="np-note">Add your free Gemini key in Settings to get a detailed explanation and the complete text of every story.</p>` : ''}
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:16px"><button class="np-chip" data-act="askpaper" data-id="${sid}">${ic('sparkle', 14)} Ask a question</button><button class="np-chip" data-act="pshare" data-id="${sid}">${ic('share', 14)} Share</button></div>
+  ${nx ? `<div class="rule1 mt20"></div><a class="np-row" href="#pstory/${nx.id}"><div class="grow"><div class="kick">Next story · page ${nx.pg + 1}</div><div class="hl3">${esc(nx.h)}</div><div class="np-m clamp2">${esc(nx.s || '')}</div></div>${ic('chev', 18)}</a>` : ''}`;
 }
 async function hydratePages() {
   for (const im of document.querySelectorAll('img[data-pimg]')) { if (im.src) continue; const [id, i] = im.dataset.pimg.split(':'); const u = await pageUrl(id, Number(i)); if (u) im.src = u; else im.style.visibility = 'hidden'; }
@@ -1341,6 +1353,7 @@ document.addEventListener('click', async (e) => {
   else if (act === 'setaccent') { S.settings.accent = b.dataset.v; applyTheme(); saveSettings(); render(); }
   else if (act === 'sec') { const s = S.settings.sections; S.settings.sections = s.includes(id) ? s.filter((x) => x !== id) : DEFAULT_SECTIONS.filter((x) => x === id || s.includes(x)); saveSettings(); render(); }
   else if (act === 'install' && S.installEvt) { S.installEvt.prompt(); S.installEvt = null; }
+  else if (act === 'pexplain') { const p = getPaper(id.split('-')[0]); const x = p?.stories.find((y) => y.id === id); if (x) { b.textContent = 'Explaining…'; try { await explainStory(p, x, S.settings.key); render(); } catch { toast('AI is busy, try again in a minute'); b.textContent = 'Explain this story in detail'; } } }
   else if (act === 'pmode') { S.pmode = b.dataset.v; render(); }
   else if (act === 'pzoom') { S.pzoom = !S.pzoom; render(); }
   else if (act === 'presume') { const p = getPaper(id); if (p) resumePaper(p, S.settings.key, paperUpdate); render(); }

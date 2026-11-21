@@ -10,8 +10,27 @@ export function looksReadable(items) {
   return good / txt.length > 0.85 && /\b(the|and|of|to|in)\b/i.test(txt);
 }
 
-export function parsePage(items, W, H) {
-  if (!items?.length) return [];
+// PDFs often split one printed line into several pieces (bold words, kerning). Join them back into whole lines.
+function joinLines(items) {
+  const its = items.filter((t) => t[4] && t[4].trim()).map((t) => [...t]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const lines = []; let band = [];
+  for (const t of its) {
+    const [x, y, w, sz] = t;
+    band = band.filter((l) => y - l[1] < sz * 1.2);
+    const l = band.find((l) => Math.abs(l[1] - y) < sz * 0.35 && Math.abs(l[3] - sz) < sz * 0.3 && x >= l[0] + l[2] - sz * 0.6 && x - (l[0] + l[2]) < sz * 1.6);
+    if (l) {
+      const gap = x - (l[0] + l[2]);
+      const sep = /\s$/.test(l[4]) || /^\s/.test(t[4]) || gap < sz * 0.12 ? '' : ' ';
+      l[4] += sep + t[4]; l[2] = x + w - l[0];
+    } else { const nl = [x, y, w, sz, t[4]]; lines.push(nl); band.push(nl); }
+  }
+  for (const l of lines) l[4] = l[4].replace(/\s+/g, ' ');
+  return lines;
+}
+
+export function parsePage(rawItems, W, H) {
+  if (!rawItems?.length) return [];
+  const items = joinLines(rawItems);
   // body text size: the size that carries the most characters
   const bySize = {};
   for (const t of items) { const k = Math.round(t[3] * 2) / 2; bySize[k] = (bySize[k] || 0) + t[4].length; }

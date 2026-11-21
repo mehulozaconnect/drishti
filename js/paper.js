@@ -26,7 +26,7 @@ export async function loadPapers() {
     const cut = Date.now() - 8 * 864e5;
     for (const p of all.filter((p) => p.at < cut)) await removePaper(p.id, p);
     PAPERS.list = all.filter((p) => p.at >= cut).sort((a, b) => b.at - a.at);
-    for (const p of PAPERS.list) if (p.text?.some(Boolean) && (p.v || 1) < 2) { const keep = {}; for (const x of p.stories) if (x.w) keep[x.h] = x; p.readIds = []; for (let i = 0; i < p.pages; i++) if (p.text[i] && p.tl[i]) { p.labels[i] = ''; parseLocal(p, i); } for (const x of p.stories) { const k = keep[x.h]; if (k) Object.assign(x, { s: k.s, w: k.w, k: k.k, imp: k.imp }); } p.v = 2; savePaper(p); }
+    for (const p of PAPERS.list) if (p.text?.some(Boolean) && (p.v || 1) < 3) { const keep = {}; for (const x of p.stories) if (x.w) keep[x.h] = x; p.readIds = []; for (let i = 0; i < p.pages; i++) if (p.text[i] && p.tl[i]) { p.labels[i] = ''; parseLocal(p, i); } for (const x of p.stories) { const k = keep[x.h]; if (k) Object.assign(x, { s: k.s, w: k.w, k: k.k, imp: k.imp }); } p.v = 3; savePaper(p); }
     for (const p of PAPERS.list) if (p.status === 'reading' || p.status === 'loading') { p.status = p.pages && p.readPages.length >= p.pages ? 'ready' : 'paused'; p.error = p.status === 'paused' ? 'Reading stopped when the app was closed.' : ''; }
   } catch (e) { console.warn('papers', e); }
   return PAPERS.list;
@@ -122,8 +122,8 @@ async function findStories(key, blob) {
 }
 const clampBox = (b) => Array.isArray(b) && b.length === 4 && b.every((x) => typeof x === 'number') ? b.map((x) => Math.max(0, Math.min(1000, Math.round(x)))) : null;
 // Step 2 (only when you open a story without PDF text, e.g. a photo): type out the full text from a crop of the page
-export async function ensureBody(p, x, key) {
-  if (x.b) return x.b;
+export async function ensureBody(p, x, key, force) {
+  if (x.b && !force) return x.b;
   const blob = await tx('pages', 'readonly', (s) => s.get(p.id + ':' + x.pg));
   let img = blob;
   if (x.box) {
@@ -211,7 +211,7 @@ async function run(p, key, onUpdate, feeder) {
 export async function addPaper(files, key, onUpdate) {
   const isPdf = files.length === 1 && /pdf/i.test(files[0].type || files[0].name);
   const id = 'p' + Date.now();
-  const p = { id, name: isPdf ? files[0].name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) : 'My newspaper', at: Date.now(), day: today(), pages: 0, readPages: [], labels: [], stories: [], readIds: [], tl: [], dims: [], text: [], enriched: [], v: 2, status: 'loading', error: '' };
+  const p = { id, name: isPdf ? files[0].name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').slice(0, 50) : 'My newspaper', at: Date.now(), day: today(), pages: 0, readPages: [], labels: [], stories: [], readIds: [], tl: [], dims: [], text: [], enriched: [], v: 3, status: 'loading', error: '' };
   PAPERS.list.unshift(p); onUpdate();
   const feeder = async (push) => {
     if (isPdf) await pdfPages(files[0], async (blob, i, n, tl, dims) => { await tx('pages', 'readwrite', (s) => s.put(blob, id + ':' + i)); p.tl[i] = tl; p.dims[i] = dims; p.text[i] = looksReadable(tl); p.pages = i + 1; p.total = n; push(i); });
@@ -222,3 +222,18 @@ export async function addPaper(files, key, onUpdate) {
 }
 export async function resumePaper(p, key, onUpdate) { if (PAPERS.busy.has(p.id)) return; await run(p, key, onUpdate, null); }
 export const isBusy = (p) => PAPERS.busy.has(p.id);
+
+// a detailed, simple explainer of one paper story, kept with the story
+export async function explainStory(p, x, key) {
+  if (x.ex) return x.ex;
+  const t = await gemini(key, [{ text: `Explain this newspaper story to a busy reader in Mumbai in simple, everyday English. Use these short sections, each 2-4 sentences, as plain text with the section name on its own line:
+What happened
+The background
+Why it matters to you
+What happens next
+Use only facts in the story; if a section has nothing, skip it.
+
+HEADLINE: ${x.h}
+STORY: ${x.b.slice(0, 7000)}` }], false, 1500, true);
+  x.ex = t.trim(); await savePaper(p); return x.ex;
+}
