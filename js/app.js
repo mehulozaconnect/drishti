@@ -204,7 +204,7 @@ function art(sec, size = 84, big = false) {
 const img = (s, sz, big) => s.image ? `<img src="${esc(s.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:window.__art('${s.section}',${sz},${big ? 1 : 0})}).firstChild)">` : art(s.section, sz, big);
 window.__art = (sec, sz, big) => art(sec, sz, !!big);
 const storyRow = (s) => { const m = secMeta(s.section); return `<a class="story" href="#story/${s.id}"><div class="thumb">${img(s, 84)}</div><div class="col gap4 grow"><span class="tag" style="color:${m.tint}">${esc(m.short)} · ${esc(s.sources[0]?.name || '')}</span><span class="ttl clamp3" data-sh="${s.id}">${esc(H(s))}</span>${s.summary ? `<span class="small muted clamp2" data-ss="${s.id}">${esc(T(s))}</span>` : ''}<span class="meta">${ago(s.time)}${s.n > 1 ? ` · <span style="color:var(--ok)">${ic('shield', 12, 2.2)} ${s.n} sources</span>` : ''}${s.factCheck ? ` · <span style="color:var(--bad)">fact-check</span>` : ''}${s.local ? ' · <span style="color:var(--accent-text)">Near you</span>' : ''}</span></div></a>`; };
-const navHtml = (on) => `<nav class="nav" aria-label="Main"><div class="in">${[['edition', 'sunrise', 'Today'], ['paper', 'book', 'Paper'], ['sections', 'grid', 'Sections'], ['markets', 'chart', 'Markets'], ['ask', 'sparkle', 'Ask']].map(([r, i, l]) => `<a href="#${r}" class="${on === r ? 'on' : ''}">${ic(i, 22)}${l}</a>`).join('')}</div></nav>`;
+const navHtml = (on) => `<nav class="nav" aria-label="Main"><div class="in">${[['feed/my', 'sunrise', 'Today'], ['paper', 'book', 'Paper'], ['sections', 'grid', 'Sections'], ['markets', 'chart', 'Markets'], ['ask', 'sparkle', 'Ask']].map(([r, i, l]) => `<a href="#${r}" class="${on === r || (r === 'feed/my' && on === 'edition') ? 'on' : ''}">${ic(i, 22)}${l}</a>`).join('')}</div></nav>`;
 const backBar = (label = 'Back') => `<div class="top" style="padding-top:8px"><button class="back" data-act="back">${ic('back', 20, 2)}${label}</button></div>`;
 function spark(vals, w = 300, h = 90, color = 'var(--up)', fill = true) {
   if (!vals || vals.length < 2) return '';
@@ -1138,29 +1138,31 @@ const edItems = () => (S.ed?.ids || []).map(edItem).filter(Boolean);
 const isBreaking = (s) => Date.now() - s.first < 4 * 3.6e6 && ((s.rank != null && s.rank < 3 && s.n >= 2) || (s.breaking && s.n >= 4));
 const cleanTitle = (s) => (s.title || '').replace(/\s+[-|–]\s+[^-|–]{2,40}$/, '').trim();
 const sentences = (t) => { const x = (t || '').replace(/\s+/g, ' ').replace(/^([A-Z]) ([a-z])/, '$1$2').trim(); const out = []; let cur = ''; for (const part of x.split(/(?<=[.!?]["’”]?)\s+(?=[A-Z0-9“"‘])/)) { cur += (cur ? ' ' : '') + part; if (!/\b(Mr|Mrs|Ms|Dr|St|No|vs|Sr|Jr|Lt|Col|Gen|Prof|Rs|Govt|Dept)\.$/.test(cur)) { out.push(cur); cur = ''; } } if (cur) out.push(cur); return out.length ? out : [t]; };
+const sixty = (t, max = 72) => { const ss = sentences(t); let out = ''; for (const x of ss) { if ((out + ' ' + x).split(/\s+/).length > max && out) break; out += (out ? ' ' : '') + x; } return out || (t || '').split(/\s+/).slice(0, max).join(' ') + '…'; };
+const srcOf = (s) => s.sources.slice(0, 2).map((x) => x.name).join(', ') + (s.n > 2 ? ` + ${s.n - 2} more` : '');
 function edText(it) {
-  if (it.type === 'paper') { const x = it.x; const ss = sentences(x.s || x.b); return { h: x.h, a: ss[0] || '', b: ss[1] || '', y: x.w || '', src: `${x.paper}, page ${x.pg + 1}`, sec: x.place || 'Paper' }; }
+  if (it.type === 'paper') { const x = it.x; return { h: x.h, t: sixty(x.s && x.s.length > 120 ? x.s : x.b || x.s), y: x.w || '', src: `${x.paper}, page ${x.pg + 1}`, sec: x.place || 'Paper' }; }
   const s = it.s; const ai = S.ed?.ai?.[s.id];
-  if (ai) return { h: cleanTitle(s), a: ai.a, b: ai.b, y: ai.y, src: s.sources.slice(0, 2).map((x) => x.name).join(', ') + (s.n > 2 ? ` + ${s.n - 2}` : ''), sec: edSec(s) };
-  const ss = sentences(T(s)); return { h: cleanTitle(s), a: ss[0] || '', b: ss[1] || '', y: '', src: s.sources.slice(0, 2).map((x) => x.name).join(', ') + (s.n > 2 ? ` + ${s.n - 2}` : ''), sec: edSec(s) };
+  const t = s.bs || (s.ai ? s.summary : ai?.t) || sixty(T(s));
+  return { h: s.bh || (s.ai && s.headline) || cleanTitle(s), t, y: ai?.y || '', src: srcOf(s), sec: edSec(s) };
 }
 let edAiBusy = false;
 async function edAi() {
-  if (edAiBusy || !S.settings.key || !S.ed) return; const want = edItems().filter((it) => it.type === 'story' && !S.ed.ai[it.s.id]).map((it) => it.s); if (!want.length) return;
+  if (edAiBusy || !S.settings.key || !S.ed) return; const want = feedItems(S.feedCat || 'my').filter((it) => it.type === 'story' && !S.ed.ai[it.s.id] && !it.s.ai && !it.s.bs).map((it) => it.s).slice(0, 15); if (!want.length) return;
   edAiBusy = true;
   try {
     const out = await gem(`You are the editor of a friendly morning news app for a busy reader in Mumbai (Malad West, commutes to Andheri East, invests in SIPs and gold).
 For each story write in ${LANG_NAME[LANG()]}:
-"a" and "b": two short sentences that tell what happened and the key detail (max 22 words each);
-"y": one line on what it means for this reader in Mumbai, only if it really affects him, else "".
+"t": a 55 to 60 word summary like Inshorts: what happened, the key numbers, why it matters; short, clear sentences;
+"y": one short line on what it means for this reader in Mumbai, only if it really affects him, else "".
 Use only the facts given. Never change who did what to whom; keep names, numbers and roles exactly as in the text.
-Return JSON: [{"id":"","a":"","b":"","y":""}]
+Return JSON: [{"id":"","t":"","y":""}]
 
 ${JSON.stringify(want.map((s) => ({ id: s.id, title: s.title, text: (s.summary || '').slice(0, 600) })))}`);
     const arr = JSON.parse(out.replace(/^```(json)?|```$/g, '').trim());
-    for (const r of Array.isArray(arr) ? arr : []) if (r.id && S.byId[r.id]) S.ed.ai[r.id] = { h: r.h, a: r.a, b: r.b, y: r.y };
+    for (const r of Array.isArray(arr) ? arr : []) if (r.id && S.byId[r.id] && r.t) S.ed.ai[r.id] = { t: r.t, y: r.y };
     saveEd();
-    const [r] = route(); if (r === 'edition' || r === 'ed' || r === '' || r === 'listen') render();
+    const [r] = route(); if (['edition', 'ed', 'feed', '', 'listen'].includes(r)) { const y = window.scrollY; render(); window.scrollTo(0, y); }
   } catch (e) { console.warn('edition ai', e); }
   edAiBusy = false;
 }
@@ -1222,36 +1224,78 @@ function listCard(kind) {
   return `<div class="ed-card list ${trend ? 'tr' : 'vi'}"><div class="ed-in"><span class="ed-chip" style="background:${trend ? '#2A1E3D' : '#3D1E2E'};color:${trend ? '#C9B3FF' : '#FFB3D1'}">${trend ? '🔥 TRENDING NOW' : '📱 VIRAL TODAY'}</span>
   <div class="ed-h" style="color:#FBF6EE;margin-top:14px">${trend ? 'What everyone is reading' : 'Going viral'}</div><p class="ed-p" style="color:#C9C0D6;margin-bottom:10px">${trend ? 'Top stories on Google News right now, from BBC, Al Jazeera, Reuters and Indian papers.' : 'The videos and posts people are sharing today.'}</p>${list.map(row).join('')}</div></div>`;
 }
+const FEEDS = [['my', 'My feed'], ['top', 'Top stories'], ['trending', 'Trending'], ['mumbai', 'Mumbai'], ['india', 'India'], ['world', 'World'], ['money', 'Money'], ['viral', 'Viral'], ['bollywood', 'Bollywood'], ['sports', 'Sports'], ['tech', 'Tech'], ['health', 'Health']];
+const FEED_SECS = { mumbai: ['mumbai'], india: ['india'], world: ['world'], money: ['markets', 'money', 'gold'], viral: ['viral'], bollywood: ['bollywood', 'movies'], sports: ['sports'], tech: ['gadgets', 'phones'], health: ['health'] };
+const feedCache = {};
+function feedItems(cat) {
+  if (!S.news) return [];
+  if (cat === 'my') { buildEdition(); return [{ type: 'hello' }, ...edItems()]; }
+  const key = cat + ':' + S.news.updated; if (feedCache[key]) return feedCache[key];
+  let list;
+  if (cat === 'top') list = frontList();
+  else if (cat === 'trending') list = S.news.stories.filter((s) => s.rank != null && Date.now() - s.time < 20 * 3.6e6).sort((a, b) => a.rank - b.rank || b.n - a.n);
+  else list = FEED_SECS[cat].flatMap((id) => secStories(id)).sort((a, b) => (S.read.has(a.id) - S.read.has(b.id)) || b.score - a.score);
+  const out = []; for (const s of list) { if (out.length >= 30) break; if ((s.summary || '').length < 60 || out.some((x) => similar2(x.s.title, s.title))) continue; out.push({ type: 'story', s }); }
+  return (feedCache[key] = out);
+}
+function helloCard() {
+  const w = S.weather; const q = Q(); const hr = new Date().getHours();
+  const greet = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+  const items = edItems(); const n = items.filter((it) => it.type === 'story' || it.type === 'paper').length;
+  const lead = items.find((it) => it.type === 'story'); const L = lead ? edText(lead) : null;
+  const tile = (k, l, f) => q[k] ? `<a class="ed-tile" href="#markets"><span>${l}</span><b>${f(q[k].price)}</b><em class="${q[k].pct >= 0 ? 'up' : 'down'}">${q[k].pct >= 0 ? '▲' : '▼'} ${Math.abs(q[k].pct).toFixed(1)}%</em></a>` : '';
+  return `<div class="ed-card hello"><div class="ed-in">
+  <div class="ed-m">${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${w?.w?.current ? ` · ${Math.round(w.w.current.temperature_2m)}° ${esc(w.loc.name)}${w.aqi != null ? ` · AQI ${w.aqi}` : ''}` : ''}</div>
+  <div class="ed-hi">${greet}${S.settings.name ? ', ' + esc(S.settings.name) : ''}</div>
+  <p class="ed-sub">${n} stories picked for you, about ${Math.max(4, Math.round(n * 0.5))} minutes.${L ? ` Top story: <b>${esc(L.h)}</b>.` : ''}</p>
+  <div class="ed-tiles">${tile('sensex', 'Sensex', (v) => num(v, 0))}${tile('gold', 'Gold 10g', rs)}${tile('usdinr', 'Dollar', (v) => '₹' + num(v))}</div>
+  <a class="ed-btn warm" href="#listen" style="margin-top:14px;flex:none">▶ Listen to all of it · ${Math.max(4, Math.round(n * 0.5))} min</a>
+  <div class="ed-swipe">Swipe up to start ↑</div></div></div>`;
+}
 function storyCard2(it) {
   const t = edText(it); const tn = tone(t.sec);
   const img = it.type === 'story' ? it.s.image : null;
   const href = it.type === 'story' ? `#read/${it.s.id}` : `#pstory/${it.x.id}`;
-  return `<div class="ed-card">${edPhoto(img, t.sec, 380)}<div class="ed-sheet"><div class="row" style="gap:8px">${it.type === 'story' && isBreaking(it.s) ? '<span class="ed-chip red">BREAKING</span>' : ''}<span class="ed-chip" style="background:${tn[0]};color:${tn[1]}">${esc(t.sec.toUpperCase())}</span><span class="ed-m">${esc(t.src)}${it.type === 'story' ? ' · ' + ago(it.s.time) : ''}</span></div>
+  const brk = it.type === 'story' && isBreaking(it.s);
+  return `<div class="ed-card">${edPhoto(img, t.sec, 0)}<div class="ed-sheet">
   <div class="ed-h">${esc(t.h)}</div>
-  <div class="ed-pts">${t.a ? `<div><i style="color:${tn[3]}">●</i><span>${esc(t.a)}</span></div>` : ''}${t.b ? `<div><i style="color:${tn[3]}">●</i><span>${esc(t.b)}</span></div>` : ''}</div>
+  <p class="ed-body">${esc(t.t)}</p>
   ${t.y ? `<div class="ed-you" style="background:${tn[0]};color:${tn[1]}"><b>For you:</b> ${esc(t.y)}</div>` : ''}
-  <div class="ed-act">${it.type === 'story' ? `<button data-act="save" data-id="${it.s.id}">♡ Save</button><button data-act="share" data-id="${it.s.id}">↗ Share</button><button data-act="askabout" data-id="${it.s.id}">✦ Ask</button>` : `<button data-act="askpaper" data-id="${it.x.id}">✦ Ask</button>`}<a href="${href}" class="ed-full">Full story ›</a></div></div></div>`;
+  <div class="ed-meta">${brk ? '<span class="ed-chip red">BREAKING</span>' : ''}<span class="ed-chip" style="background:${tn[0]};color:${tn[1]}">${esc(t.sec)}</span><span>${esc(t.src)}${it.type === 'story' ? ' · ' + ago(it.s.time) : ''}</span></div>
+  <div class="ed-act">${it.type === 'story' ? `<button data-act="save" data-id="${it.s.id}">${ic('bookmark', 16)} Save</button><button data-act="share" data-id="${it.s.id}">${ic('share', 16)} Share</button><button data-act="askabout" data-id="${it.s.id}">${ic('sparkle', 16)} Ask</button>` : `<button data-act="askpaper" data-id="${it.x.id}">${ic('sparkle', 16)} Ask</button>`}<a href="${href}" class="ed-full">Read more ›</a></div></div></div>`;
 }
-function viewCard(i) {
-  if (!S.news) return '<div class="empty">Loading…</div>';
-  buildEdition(); const items = edItems(); if (!items.length) { location.hash = '#edition'; return ''; }
-  i = Math.max(0, Math.min(Number(i) || 0, items.length));
-  S.ed.pos = i; if (!S.ed.started) S.ed.started = Date.now(); saveEd();
-  if (i >= items.length) return viewEdDone();
-  const it = items[i]; if (it.type === 'story') markRead(it.s.id); if (it.type === 'paper') { const p = getPaper(it.x.pid); if (p) markPaperRead(p, it.x.id); }
-  const bars = items.map((_, k) => `<i class="${k < i ? 'd' : k === i ? 'c' : ''}"></i>`).join('');
+function viewFeed(cat, i) {
+  if (!S.news) return '<div class="empty">Getting today’s news…</div>';
+  cat = FEEDS.some(([k]) => k === cat) ? cat : 'my'; S.feedCat = cat;
+  const items = feedItems(cat);
+  const saved = LS.get('feedPos', {});
+  i = i == null || i === '' ? (cat === 'my' ? (S.ed?.pos || 0) : saved[cat] || 0) : Number(i) || 0;
+  i = Math.max(0, Math.min(i, items.length));
+  if (cat === 'my') { S.ed.pos = i; if (!S.ed.started && i > 0) S.ed.started = Date.now(); saveEd(); } else { saved[cat] = i; LS.set('feedPos', saved); }
+  const tabs = `<nav class="ed-cats" id="edcats">${FEEDS.map(([k, l]) => `<a href="#feed/${k}" class="${k === cat ? 'on' : ''}">${l}</a>`).join('')}</nav>`;
+  setTimeout(() => $('#edcats .on')?.scrollIntoView({ inline: 'center', block: 'nearest' }), 0);
+  if (i >= items.length) {
+    if (cat === 'my') return `<div class="ed-stage page" id="edstage" data-i="${i}" data-cat="${cat}">${tabs}<div class="ed-scroll">${viewEdDone()}</div></div>`;
+    return `<div class="ed-stage page" id="edstage" data-i="${i}" data-cat="${cat}">${tabs}<div class="ed-scroll"><div class="ed" style="padding-top:40px;text-align:center"><div class="ed-tick">✓</div><div class="ed-hi" style="font-size:26px">You’re up to date on ${esc(FEEDS.find(([k]) => k === cat)[1])}</div><p class="ed-sub">Pick another topic above, or start again.</p><a class="ed-btn dark" style="margin-top:16px" href="#feed/${cat}/0">Start again</a></div></div></div>`;
+  }
+  const it = items[i];
+  if (it.type === 'story') markRead(it.s.id); if (it.type === 'paper') { const p = getPaper(it.x.pid); if (p) markPaperRead(p, it.x.id); }
   setTimeout(edSwipe, 0); setTimeout(edAi, 300);
-  return `<div class="ed-stage ${['money', 'trend', 'viral'].includes(it.type) ? 'dark' : ''}" id="edstage" data-i="${i}" data-n="${items.length}"><div class="ed-bars">${bars}</div><div class="ed-hd"><span>${i + 1} of ${items.length}</span><a href="#edition" aria-label="Close">${ic('x', 20, 2.2)}</a></div>${it.type === 'money' ? moneyCard() : it.type === 'trend' || it.type === 'viral' ? listCard(it.type) : storyCard2(it)}<div class="ed-hint">Tap right or swipe for next</div></div>`;
+  const nx = items[i + 1]; if (nx?.type === 'story' && nx.s.image) { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.src = nx.s.image; }
+  const body = it.type === 'hello' ? helloCard() : it.type === 'money' ? moneyCard() : it.type === 'trend' || it.type === 'viral' ? listCard(it.type) : storyCard2(it);
+  return `<div class="ed-stage ${['money', 'trend', 'viral'].includes(it.type) ? 'dark' : ''}" id="edstage" data-i="${i}" data-n="${items.length}" data-cat="${cat}">${tabs}<div class="ed-count">${i + 1} / ${items.length}</div>${body}</div>`;
 }
+const viewCard = (i) => viewFeed('my', i);
 function edSwipe() {
   const st = $('#edstage'); if (!st || st.dataset.b) return; st.dataset.b = 1;
-  const i = Number(st.dataset.i); const go = (k) => { location.hash = '#ed/' + k; };
-  let x0 = null, y0 = null, t0 = 0;
-  st.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); }, { passive: true });
-  st.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null; if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); go(dx < 0 ? i + 1 : Math.max(0, i - 1)); } else if (dy < -70 && Math.abs(dy) > Math.abs(dx)) go(i + 1); });
-  st.addEventListener('click', (e) => { if (e.target.closest('a,button')) return; const w = window.innerWidth; const x = e.clientX; if (x > w * 0.62) go(i + 1); else if (x < w * 0.3) go(Math.max(0, i - 1)); });
+  const i = Number(st.dataset.i); const cat = st.dataset.cat || 'my';
+  const go = (k) => { const card = st.querySelector('.ed-card'); if (card) card.classList.add(k > i ? 'out-up' : 'out-down'); setTimeout(() => { location.hash = `#feed/${cat}/${k}`; }, 140); };
+  let x0 = null, y0 = null;
+  st.addEventListener('touchstart', (e) => { if (e.target.closest('.ed-cats,.ed-in.scroll')) { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  st.addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null; if (Math.abs(dy) > 55 && Math.abs(dy) > Math.abs(dx)) go(dy < 0 ? i + 1 : Math.max(0, i - 1)); else if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? i + 1 : Math.max(0, i - 1)); });
+  st.addEventListener('wheel', (e) => { if (Math.abs(e.deltaY) > 40 && !st.dataset.w) { st.dataset.w = 1; go(e.deltaY > 0 ? i + 1 : Math.max(0, i - 1)); } }, { passive: true });
 }
-document.addEventListener('keydown', (e) => { const st = $('#edstage'); if (!st) return; const i = Number(st.dataset.i); if (e.key === 'ArrowRight') location.hash = '#ed/' + (i + 1); if (e.key === 'ArrowLeft') location.hash = '#ed/' + Math.max(0, i - 1); });
+document.addEventListener('keydown', (e) => { const st = $('#edstage'); if (!st) return; const i = Number(st.dataset.i); const c = st.dataset.cat || 'my'; if (['ArrowDown', 'ArrowRight', ' '].includes(e.key)) location.hash = `#feed/${c}/${i + 1}`; if (['ArrowUp', 'ArrowLeft'].includes(e.key)) location.hash = `#feed/${c}/${Math.max(0, i - 1)}`; });
 
 // quiz from today's headlines: guess the missing name
 const QUIZ_SKIP = new Set('The This What Why How After With From When Will Has Have New First Three Two Four Five Early Late Strong Opposition Big Top Leaders Mother Father Dies Death Live Watch Video Photos Check Here November December January February March April June July August September October Friday Saturday Sunday Monday Tuesday Wednesday Thursday India Indian Mumbai Court Supreme Govt Government Police State Centre City World News Today Says Said Over Amid Plan Plans Report Know Explained Express Condolences Attack Case'.split(' '));
@@ -1278,7 +1322,7 @@ function viewEdDone() {
   const score = ed.quiz.filter((q) => q.pick === q.a).length; const answered = ed.quiz.every((q) => q.pick != null);
   return `<div class="ed" style="padding-top:34px"><div class="ed-tick">✓</div><div class="ed-hi" style="text-align:center;font-size:30px">You’re done for the ${isMorning() ? 'morning' : 'evening'}</div><p class="ed-sub" style="text-align:center">${n} stories${mins ? ` in ${mins} min` : ''}${streak > 1 ? ` · ${streak}-day streak 🔥` : ''}</p>
   ${quiz ? `<div class="ed-quiz"><div class="ed-lab">QUICK QUIZ${answered ? ` · YOU GOT ${score} OF ${ed.quiz.length}` : ''}</div>${quiz}</div>` : ''}
-  ${edMore()}<a class="ed-btn dark" style="margin-top:18px" href="#edition">Back to today</a><div class="np-foot">${isMorning() ? 'Evening edition after 3 pm' : 'Next edition tomorrow morning'}</div></div>`;
+  ${edMore()}<a class="ed-btn dark" style="margin-top:18px" href="#feed/top/0">Browse top stories</a><div class="np-foot">${isMorning() ? 'Evening edition after 3 pm' : 'Next edition tomorrow morning'}</div></div>`;
 }
 
 // ---------- listen: the edition read aloud ----------
@@ -1323,19 +1367,20 @@ function viewListen() {
 
 // ---------- router ----------
 function route() { return (location.hash || '#edition').slice(1).split('/'); }
-const TAB_OF = { edition: 'edition', ed: 'edition', listen: 'edition', '': 'edition', front: 'sections', home: 'edition', paper: 'paper', pdoc: 'paper', page: 'paper', pstory: 'paper', sections: 'sections', section: 'sections', explore: 'sections', todo: 'sections', history: 'sections', saved: 'sections', factchecks: 'sections', videos: 'sections', search: 'sections', settings: 'sections', quick: 'sections', markets: 'markets', money: 'markets', grow: 'markets', calc: 'markets', guide: 'markets', learn: 'markets', ask: 'ask' };
+const TAB_OF = { edition: 'edition', ed: 'edition', feed: 'edition', listen: 'edition', '': 'edition', front: 'sections', home: 'edition', paper: 'paper', pdoc: 'paper', page: 'paper', pstory: 'paper', sections: 'sections', section: 'sections', explore: 'sections', todo: 'sections', history: 'sections', saved: 'sections', factchecks: 'sections', videos: 'sections', search: 'sections', settings: 'sections', quick: 'sections', markets: 'markets', money: 'markets', grow: 'markets', calc: 'markets', guide: 'markets', learn: 'markets', ask: 'ask' };
 function render() {
   const [r, a, c] = route(); const v = $('#view');
-  const map = { history: viewHistory, home: viewEdition, edition: viewEdition, listen: viewListen, front: viewFront, quick: viewQuick, grow: viewGrow, ask: viewAsk, explore: npSections, sections: npSections, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide, paper: viewPaper };
+  const map = { history: viewHistory, home: () => viewFeed('my'), edition: () => viewFeed('my'), '': () => viewFeed('my'), listen: viewListen, front: viewFront, quick: viewQuick, grow: viewGrow, ask: viewAsk, explore: npSections, sections: npSections, settings: viewSettings, saved: viewSaved, factchecks: viewFactchecks, videos: viewVideos, guide: viewGuide, paper: viewPaper };
   let html;
-  if (r === 'todo' || (r === 'section' && a === 'events')) html = viewTodo(r === 'todo' ? (a || 'all') : 'all'); else if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read' || r === 'story') html = viewRead(a, c != null ? Number(c) : null); else if (r === 'section') html = npSection(a); else if (r === 'markets' || r === 'money') html = npMarkets(a || 'all'); else if (r === 'pdoc') html = viewPaperDoc(a, c); else if (r === 'ed') html = viewCard(a); else if (r === 'page') html = viewPage(a, c); else if (r === 'pstory') html = viewPStory(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || viewEdition)();
+  if (r === 'todo' || (r === 'section' && a === 'events')) html = viewTodo(r === 'todo' ? (a || 'all') : 'all'); else if (r === 'quick') html = viewQuick(a || 'all'); else if (r === 'web') html = viewWeb(a); else if (r === 'read' || r === 'story') html = viewRead(a, c != null ? Number(c) : null); else if (r === 'section') html = npSection(a); else if (r === 'markets' || r === 'money') html = npMarkets(a || 'all'); else if (r === 'pdoc') html = viewPaperDoc(a, c); else if (r === 'ed') html = viewFeed('my', a); else if (r === 'feed') html = viewFeed(a || 'my', c); else if (r === 'page') html = viewPage(a, c); else if (r === 'pstory') html = viewPStory(a); else if (r === 'calc') html = viewCalc(a); else if (r === 'learn') html = viewLearn(a); else if (r === 'search') html = viewSearch(a || ''); else html = (map[r] || (() => viewFeed('my')))();
   const tab = r === 'read' || r === 'web' || r === 'story' ? S.lastTab : TAB_OF[r] || 'sections';
   if (!['story', 'read', 'web'].includes(r)) S.lastTab = tab;
-  v.className = r === 'quick' || r === 'ed' ? 'full' : r === 'listen' ? 'radio' : '';
+  const feedish = ['ed', 'feed', 'edition', 'home', ''].includes(r);
+  v.className = r === 'quick' ? 'full' : feedish ? 'feed' : r === 'listen' ? 'radio' : '';
   v.innerHTML = html;
   hydratePages();
   setTimeout(() => { clientEditor().then(simplifyVisible); }, 300);
-  $('#navwrap').innerHTML = r === 'quick' || r === 'ed' || r === 'listen' ? '' : navHtml(tab || 'edition');
+  $('#navwrap').innerHTML = r === 'quick' || r === 'listen' ? '' : navHtml(tab || 'edition');
 }
 let lastHash = '';
 window.addEventListener('hashchange', () => {

@@ -10,6 +10,9 @@ import { TRUSTED, SECTIONS, FACTCHECK_FEEDS, TOP_FEED } from './sources.mjs';
 const DATA = new URL('../data/', import.meta.url);
 const CACHE = new URL('../.cache/', import.meta.url); // kept between runs by actions/cache, not committed
 const GEMINI_KEY = process.env.GEMINI_API_KEY || '';
+const GH_TOKEN = process.env.GH_MODELS_TOKEN || '';
+const GH_MODELS = ['openai/gpt-4.1-mini', 'openai/gpt-4o-mini'];
+const AI_ON = !!(GEMINI_KEY || GH_TOKEN);
 const GEMINI_MODELS = (process.env.GEMINI_MODEL || 'gemini-2.5-flash,gemini-flash-latest,gemini-2.0-flash').split(',');
 const YT_KEY = process.env.YOUTUBE_API_KEY || '';
 const NTFY_TOPIC = process.env.NTFY_TOPIC || '';
@@ -424,16 +427,16 @@ Pick: big national and world events, anything that hits his wallet or daily life
 Skip: duplicates of the same event, political mud-slinging and rhetoric, opinion pieces, minor crime, celebrity gossip, how-to and listicles, vague or clickbait headlines.
 Order by importance, but keep variety (no more than 5 from one section).
 For each pick write, in ${lang}, using ONLY the facts given (never add facts or numbers):
-- "h": a crisp, specific headline of at most 12 words, like Inshorts ("CNG prices in Mumbai hiked for 2nd time in 15 days")
+- "h": a crisp, specific headline of at most 12 words, like Inshorts ("CNG prices in Mumbai hiked for 2nd time in 15 days"); keep who did what to whom exactly as reported
 - "t": a 50 to 60 word summary in 3 or 4 short sentences: what happened, key numbers, and why it matters.
 Return JSON only: [{"id":"...","h":"...","t":"..."}]
 
 CANDIDATES:
 ${cands.map((s) => JSON.stringify({ id: s.id, section: s.section, outlets: s.n, title: s.title, summary: (s.summary || '').slice(0, 320) })).join('\n')}`;
 async function editorPick(all) {
-  if (!GEMINI_KEY) return null;
+  if (!AI_ON) return null;
   const cands = [...all].filter((s) => (s.summary || '').split(/\s+/).length >= 40).sort((a, b) => b.score - a.score).slice(0, 160);
-  const out = await gemini(EDITOR_PROMPT(cands), ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']);
+  const out = await llm(EDITOR_PROMPT(cands.slice(0, GEMINI_KEY ? 160 : 70)), ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']);
   if (!out) return null;
   try {
     const arr = JSON.parse(out.replace(/^```json|```$/g, '')).filter((x) => x.id && all.some((s) => s.id === x.id));
@@ -443,6 +446,22 @@ async function editorPick(all) {
 }
 
 // ---------- summaries ----------
+// AI writer: your Gemini key if set, otherwise GitHub's free built-in models (no key needed)
+let ghCalls = 0; let ghBudget = 3;
+async function githubModel(prompt) {
+  if (!GH_TOKEN || ghCalls >= ghBudget) return null;
+  for (const model of GH_MODELS) {
+    try {
+      ghCalls++;
+      const r = await fetch('https://models.github.ai/inference/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${GH_TOKEN}`, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ model, temperature: 0.2, max_tokens: 4000, messages: [{ role: 'system', content: 'You are a careful news editor. Reply with JSON only.' }, { role: 'user', content: prompt }] }) });
+      if (!r.ok) { log('github model', model, r.status, (await r.text()).slice(0, 200)); if (r.status === 429) { ghBudget = 0; return null; } continue; }
+      const j = await r.json(); const t = j?.choices?.[0]?.message?.content || '';
+      const m = t.match(/\[[\s\S]*\]/); return m ? m[0] : t;
+    } catch (e) { log('github model error', e.message); }
+  }
+  return null;
+}
+async function llm(prompt, models) { if (GEMINI_KEY) { const o = await gemini(prompt, models); if (o) return o; } return githubModel(prompt); }
 async function gemini(prompt, models = GEMINI_MODELS) {
   for (const model of models) {
     try {
@@ -461,15 +480,19 @@ async function gemini(prompt, models = GEMINI_MODELS) {
 
 async function summarise(stories, cache) {
   const need = stories.filter((s) => !cache[s.id]?.summary || cache[s.id].n < s.n);
-  log(`summaries: ${stories.length - need.length} cached, ${need.length} to write, gemini=${GEMINI_KEY ? 'on' : 'off'}`);
-  if (GEMINI_KEY) {
-    for (let i = 0; i < need.length && i < 160; i += 8) {
-      const batch = need.slice(i, i + 8);
-      const prompt = `You write the "Quick 60" section of an Indian morning news app. For each story below, write a neutral, factual summary of 50 to 60 words in very simple, everyday English that a busy reader understands at a glance (short sentences, no jargon; explain any hard term in brackets), using ONLY the facts given (headlines and snippets from trusted outlets). Do not invent numbers, names or quotes. Lead with what happened, then why it matters. Also write a short headline (max 12 words).
+  // write the stories readers will see first: Google's top stories, multi-source and highest scored
+  need.sort((a, b) => ((b.rank != null ? 50 - Math.min(b.rank, 40) : 0) + b.score * 10) - ((a.rank != null ? 50 - Math.min(a.rank, 40) : 0) + a.score * 10));
+  log(`summaries: ${stories.length - need.length} cached, ${need.length} to write, ai=${GEMINI_KEY ? 'gemini' : GH_TOKEN ? 'github' : 'off'}`);
+  if (AI_ON) {
+    const B = GEMINI_KEY ? 8 : 12;
+    for (let i = 0; i < need.length && i < (GEMINI_KEY ? 160 : 24); i += B) {
+      if (!GEMINI_KEY && ghCalls >= ghBudget - 1) break; // keep one call for the editor
+      const batch = need.slice(i, i + B);
+      const prompt = `You write the "Quick 60" section of an Indian morning news app. For each story below, write a neutral, factual summary of 50 to 60 words in very simple, everyday English that a busy reader understands at a glance (short sentences, no jargon; explain any hard term in brackets), using ONLY the facts given (headlines and snippets from trusted outlets). Do not invent numbers, names or quotes. Never change who did what to whom (who threatened, attacked, arrested or accused whom). Lead with what happened, then why it matters. Also write a short, specific headline (max 12 words) that keeps the facts and roles exactly right.
 Return JSON: [{"id":"...","headline":"...","summary":"..."}]
 
-${batch.map((s) => JSON.stringify({ id: s.id, headlines: [s.title, ...(s.alt || [])].slice(0, 4), snippet: s.desc, article_start: (s.body || '').slice(0, 1200), outlets: s.sources.map((x) => x.name) })).join('\n')}`;
-      const out = await gemini(prompt);
+${batch.map((s) => JSON.stringify({ id: s.id, headlines: [s.title, ...(s.alt || [])].slice(0, 4), snippet: s.desc, article_start: (s.body || '').slice(0, GEMINI_KEY ? 1200 : 900), outlets: s.sources.map((x) => x.name) })).join('\n')}`;
+      const out = await llm(prompt);
       if (!out) break;
       try {
         const arr = JSON.parse(out.replace(/^```json|```$/g, ''));
@@ -557,6 +580,7 @@ async function main() {
   const prevMarkets = await readJson('markets.json', null);
   const cache = await readJson('summaries.json', {}, CACHE);
   const state = await readJson('state.json', { alerted: [], briefDate: '' }, CACHE);
+  { const d = new Date(NOW + 5.5 * 3.6e6).toISOString().slice(0, 10); if (state.aiDay !== d) { state.aiDay = d; state.aiUsed = 0; } ghBudget = Math.max(0, Math.min(3, 140 - (state.aiUsed || 0))); }
 
   const sectionItems = await Promise.all(SECTIONS.map(async (sec) => {
     const lists = await Promise.all(sec.feeds.map(async (u) => (await loadFeed(u)).map((i, idx) => { const main = u === 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en' || u.includes('/topic/NATION'); const glob = /news\.google\.com\/rss\?hl=en-(GB|US)/.test(u); const top = u.includes(TOP_FEED) || main || glob; return { ...i, origin: sec.id, google: u.includes('news.google.com'), top, rank: main ? idx : glob ? 4 + idx * 1.5 : top ? 25 + idx : null }; })));
@@ -629,7 +653,12 @@ async function main() {
   { const fresh = all.filter((x) => x.rank != null && (x.rank < 25 || (x.rank < 29 && x.n >= 2)) && NOW - x.time < 20 * 3.6e6 && !['events', 'knowledge', 'viral', 'spiritual', 'movies'].includes(x.section));
     const ranked = fresh.sort((a, b) => a.rank - b.rank || b.score - a.score); const order = [...ranked.slice(0, 9), ...mustKnow.slice(0, 4).map((id) => all.find((x) => x.id === id)).filter(Boolean), ...ranked.slice(9), ...mustKnow.map((id) => all.find((x) => x.id === id)).filter(Boolean)];
     for (const st of order) { if (front.length >= 14) break; if (front.includes(st.id)) continue; if (front.some((id) => similar(tokens(all.find((x) => x.id === id).title), tokens(st.title)) >= 0.25)) continue; front.push(st.id); } }
-  const brief = await editorPick(all);
+  // the AI editor re-picks at most every 45 minutes (GitHub's free AI has a daily limit); in between, reuse its last picks
+  let brief = null;
+  if (GEMINI_KEY || (NOW - (state.editorAt || 0) > 45 * 6e4 && ghCalls < ghBudget)) { brief = await editorPick(all); if (brief) { state.editorAt = NOW; state.lastBrief = brief; } }
+  if (!brief && state.lastBrief) brief = state.lastBrief.filter((x) => all.some((s) => s.id === x.id));
+  if (brief && brief.length < 8) brief = null;
+  state.aiUsed = (state.aiUsed || 0) + ghCalls;
   if (brief) for (const x of brief) { const st = all.find((s) => s.id === x.id); if (st) { st.bh = x.h; st.bs = x.t; } }
   const news = { updated: NOW, sections, front, mustKnow, quick60, brief: brief ? brief.map((x) => x.id) : null, stories: all, factChecks: checks.slice(0, 15), videos: vids, stats: { feeds: feedStats.length, ok: feedStats.filter((f) => f.ok).length, items: sectionItems.flat().length } };
 
